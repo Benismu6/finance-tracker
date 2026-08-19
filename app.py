@@ -35,13 +35,15 @@ st.markdown("""
         visibility: hidden !important;
     }
 
-    /* 3. MOBILE CONTAINER PADDING (ENSURES TABS SIT PROPERLY AT TOP) */
+/* 3. RESPONSIVE CONTAINER (CENTERED ON DESKTOP, FULL-WIDTH ON PHONE) */
     .block-container {
         padding-top: 1.2rem !important;
         padding-bottom: 2rem !important;
         padding-left: 0.8rem !important;
         padding-right: 0.8rem !important;
-        max-width: 100% !important;
+        max-width: 580px !important; /* Locks width to a clean, phone-sized card on PC */
+        margin-left: auto !important;
+        margin-right: auto !important;
     }
     
     /* 4. TAB CONTAINER STYLING */
