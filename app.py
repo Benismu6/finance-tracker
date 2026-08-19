@@ -383,43 +383,69 @@ with tabs[0]:
                     st.info(f"Payment recorded: ${pay_amt:.2f} to {target_card}")
 
 # ------------------------------------------
-# TAB 2: ANALYTICS & CHARTS
+# TAB 2: ANALYTICS & CHARTS (100% DYNAMIC)
 # ------------------------------------------
 with tabs[1]:
     st.subheader("📊 Spending & Cash Flow Insights")
     
-    cat_df = df_tx[df_tx["Type"] == "Expense"].groupby("Category")["Amount"].sum().reset_index()
-    if cat_df.empty:
-        cat_df = pd.DataFrame({
-            "Category": ["Housing / Rent", "Vehicle & Gas", "Groceries & Food", "Dining Out", "Utilities", "Personal"],
-            "Amount": [500, 360, 245, 150, 140, 110]
-        })
+    # 1. Real-time Expenses by Category
+    expense_data = df_tx[df_tx["Type"] == "Expense"]
     
-    fig_pie = px.pie(
-        cat_df, values="Amount", names="Category", hole=0.55, 
-        title="Spending by Category", color_discrete_sequence=px.colors.qualitative.Prism
-    )
-    fig_pie.update_layout(
-        margin=dict(l=10, r=10, t=40, b=10), height=300, showlegend=True,
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#CBD5E1")
-    )
-    st.plotly_chart(fig_pie, use_container_width=True)
-    
-    flow_df = pd.DataFrame({
-        "Period": ["Week 1", "Week 2", "Week 3", "Week 4"],
-        "Income": [1280, 1340, 1280, 1400],
-        "Expenses": [340, 310, 290, 320]
-    })
-    fig_bar = go.Figure(data=[
-        go.Bar(name="Net Income", x=flow_df["Period"], y=flow_df["Income"], marker_color="#3B82F6"),
-        go.Bar(name="Expenses", x=flow_df["Period"], y=flow_df["Expenses"], marker_color="#EF4444")
-    ])
-    fig_bar.update_layout(
-        barmode="group", title="Weekly Cash Flow Pace ($)", height=280, 
-        margin=dict(l=10, r=10, t=40, b=10), paper_bgcolor="rgba(0,0,0,0)", 
-        plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#CBD5E1")
-    )
-    st.plotly_chart(fig_bar, use_container_width=True)
+    if not expense_data.empty:
+        cat_df = expense_data.groupby("Category")["Amount"].sum().reset_index()
+        
+        fig_pie = px.pie(
+            cat_df, 
+            values="Amount", 
+            names="Category", 
+            hole=0.55, 
+            title="Actual Spending by Category",
+            color_discrete_sequence=px.colors.qualitative.Prism
+        )
+        fig_pie.update_layout(
+            margin=dict(l=10, r=10, t=40, b=10),
+            height=320,
+            showlegend=True,
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#CBD5E1")
+        )
+        st.plotly_chart(fig_pie, use_container_width=True)
+    else:
+        st.info("ℹ️ **No expenses recorded yet.** Once you log expenses in the Command Center, your live spending breakdown will appear here.")
+
+    st.divider()
+
+    # 2. Dynamic Income vs Expense Comparison
+    if not df_tx.empty and "Type" in df_tx.columns:
+        # Group real transactions by Date/Week
+        df_tx_copy = df_tx.copy()
+        df_tx_copy["Date"] = pd.to_datetime(df_tx_copy["Date"], errors="coerce")
+        df_tx_valid = df_tx_copy.dropna(subset=["Date"])
+        
+        if not df_tx_valid.empty:
+            df_tx_valid["Week"] = df_tx_valid["Date"].dt.strftime("W%U (%b)")
+            flow_summary = df_tx_valid.groupby(["Week", "Type"])["Amount"].sum().unstack(fill_value=0).reset_index()
+            
+            inc_vals = flow_summary["Income"] if "Income" in flow_summary.columns else [0] * len(flow_summary)
+            exp_vals = flow_summary["Expense"] if "Expense" in flow_summary.columns else [0] * len(flow_summary)
+            
+            fig_bar = go.Figure(data=[
+                go.Bar(name="Income", x=flow_summary["Week"], y=inc_vals, marker_color="#3B82F6"),
+                go.Bar(name="Expenses", x=flow_summary["Week"], y=exp_vals, marker_color="#EF4444")
+            ])
+            fig_bar.update_layout(
+                barmode="group",
+                title="Weekly Cash Flow Pace ($)",
+                height=280,
+                margin=dict(l=10, r=10, t=40, b=10),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#CBD5E1")
+            )
+            st.plotly_chart(fig_bar, use_container_width=True)
+    else:
+        st.caption("💡 Cash flow trends will build automatically as weekly income and expenses are logged.")
 
 # ------------------------------------------
 # TAB 3: ACCOUNTS & CREDIT HUB
