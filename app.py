@@ -20,23 +20,57 @@ st.markdown("""
 <style>
     .block-container { padding-top: 1rem; padding-bottom: 2rem; padding-left: 0.8rem; padding-right: 0.8rem; }
     
-    /* --- TAB VISIBILITY FIX --- */
+    /* === BULLETPROOF STREAMLIT TAB VISIBILITY FIX === */
+    /* Target the tab container */
+    div[data-baseweb="tab-list"] {
+        background-color: #0F172A !important;
+        border-radius: 12px !important;
+        padding: 4px !important;
+        gap: 4px !important;
+        display: flex !important;
+        width: 100% !important;
+        overflow-x: auto !important;
+    }
+    
+    /* Target individual tab buttons */
+    div[data-baseweb="tab-list"] button,
     button[data-baseweb="tab"] {
-        color: #94A3B8 !important;
-        font-weight: 700 !important;
-        font-size: 14px !important;
-        padding-left: 8px !important;
-        padding-right: 8px !important;
+        background-color: #1E293B !important;
+        border-radius: 8px !important;
+        padding: 8px 12px !important;
+        margin: 2px !important;
+        border: 1px solid #334155 !important;
     }
-    button[data-baseweb="tab"][aria-selected="true"] {
-        color: #38BDF8 !important;
-        font-weight: 800 !important;
-        border-bottom: 2px solid #38BDF8 !important;
-    }
+    
+    /* Target ALL text, p-tags, and spans inside tab buttons */
+    div[data-baseweb="tab-list"] button *,
+    button[data-baseweb="tab"] *,
+    div[data-baseweb="tab-list"] p,
     button[data-baseweb="tab"] p {
-        color: inherit !important;
-        font-size: inherit !important;
-        font-weight: inherit !important;
+        color: #F8FAFC !important;
+        font-weight: 700 !important;
+        font-size: 13px !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        display: inline-block !important;
+    }
+    
+    /* Selected / Active Tab Highlight */
+    button[data-baseweb="tab"][aria-selected="true"],
+    div[data-baseweb="tab-list"] button[aria-selected="true"] {
+        background-color: #2563EB !important;
+        border: 1px solid #60A5FA !important;
+    }
+    
+    button[data-baseweb="tab"][aria-selected="true"] *,
+    div[data-baseweb="tab-list"] button[aria-selected="true"] * {
+        color: #FFFFFF !important;
+        font-weight: 800 !important;
+    }
+    
+    /* Hide the default orange/red underline indicator */
+    div[data-baseweb="tab-highlight"] {
+        display: none !important;
     }
 
     /* Hero Card */
