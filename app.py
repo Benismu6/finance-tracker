@@ -27,7 +27,7 @@ st.markdown("""
         padding-bottom: 2rem !important;
         padding-left: 0.8rem !important;
         padding-right: 0.8rem !important;
-        max-width: 580px !important;
+        max-width: 750px !important;
         margin-left: auto !important;
         margin-right: auto !important;
     }
