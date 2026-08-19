@@ -244,7 +244,8 @@ def generate_ai_insights():
             model = genai.GenerativeModel("gemini-1.5-flash")
             prompt = f"""
             Act as an elite financial advisor. Provide a concise 2-sentence update:
-            - Net Liquid Cash: ${net_liquid_cash:,.2f} (Total Cash: ${total_cash:,.2f}, Personal CCs:${personal_cc_debt:,.2f}, Biz CC: ${biz_cc_debt:,.2f}).             - Personal Credit Util: {personal_utilization:.2f}\% across${personal_cc_limit:,.2f} limit.
+            - Net Liquid Cash: ${net_liquid_cash:,.2f} (Total Cash: ${total_cash:,.2f}, Personal CCs: ${personal_cc_debt:,.2f}, Biz CC: ${biz_cc_debt:,.2f}).
+            - Personal Credit Util: {personal_utilization:.2f}% across ${personal_cc_limit:,.2f} limit.
             - Upcoming Actions: Pay BofA 5309 and BofA 7197 by Aug 23. Pay Chase 1993 and Chase 0431 by Aug 31. Keep Chase 2207 at $9.52 for AZEO boost.
             """
             response = model.generate_content(prompt)
@@ -269,7 +270,7 @@ with tabs[0]:
             <span style="color:#93C5FD; font-size:12px;">Personal Util: {personal_utilization:.2f}%</span>
         </div>
         <div class="metric-val">${net_liquid_cash:,.2f}</div>
-        <div class="metric-sub">Total Cash: ${total_cash:,.2f} | Personal Debt: ${personal_cc_debt:,.2f} \vert{} Biz Debt:${biz_cc_debt:,.2f}</div>
+        <div class="metric-sub">Total Cash: ${total_cash:,.2f} | Personal Debt: ${personal_cc_debt:,.2f} | Biz Debt: ${biz_cc_debt:,.2f}</div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -534,4 +535,13 @@ with tabs[3]:
     st.markdown("""
     ---
     **10% Down Acquisition Strategy Summary:**
-    * **Target Price:** $300,000 |
+    * **Target Price:** $300,000 | **Down Payment (10%):** $30,000
+    * **Estimated Closing & Prepaids:** $11,000
+    * **Credits & Assistance Applied:** -$21,000
+      * *2.5% Buyer Agent Commission Credit:* -$7,500
+      * *Maryland Mortgage Program (MMP) DPA:* -$9,000
+      * *Seller Concessions (1.5%):* -$4,500
+    * **Net Cash at Closing:** $20,000
+    * **Post-Closing 3-Mo Reserves:** $6,500
+    * **Total Liquid Target:** **$26,500**
+    """)
