@@ -41,7 +41,7 @@ st.markdown("""
         padding-bottom: 2rem !important;
         padding-left: 0.8rem !important;
         padding-right: 0.8rem !important;
-        max-width: 580px !important; /* Locks width to a clean, phone-sized card on PC */
+        max-width: 650px !important; /* Locks width to a clean, phone-sized card on PC */
         margin-left: auto !important;
         margin-right: auto !important;
     }
