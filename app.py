@@ -2,12 +2,13 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime
+from datetime import datetime, date, timedelta
+import calendar
 from streamlit_gsheets import GSheetsConnection
 import google.generativeai as genai
 
 # ==========================================
-# 1. PAGE SETUP & FULL-SCREEN MOBILE CSS
+# 1. PAGE SETUP & HIGH-CONTRAST CSS
 # ==========================================
 st.set_page_config(
     page_title="Financial Command Hub",
@@ -18,35 +19,20 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    /* 1. HIDE STREAMLIT TOP HEADER BAR (FORK / GITHUB / 3 DOTS) */
-    header[data-testid="stHeader"],
-    .stAppHeader,
-    header {
-        display: none !important;
-        visibility: hidden !important;
-        height: 0px !important;
-    }
-    
-    /* 2. HIDE TOP DECORATION & FOOTER */
-    div[data-testid="stDecoration"],
-    #MainMenu,
-    footer {
-        display: none !important;
-        visibility: hidden !important;
-    }
+    header[data-testid="stHeader"], .stAppHeader, header { display: none !important; visibility: hidden !important; height: 0px !important; }
+    div[data-testid="stDecoration"], #MainMenu, footer { display: none !important; visibility: hidden !important; }
 
-/* 3. RESPONSIVE CONTAINER (CENTERED ON DESKTOP, FULL-WIDTH ON PHONE) */
     .block-container {
         padding-top: 1.2rem !important;
         padding-bottom: 2rem !important;
         padding-left: 0.8rem !important;
         padding-right: 0.8rem !important;
-        max-width: 750px !important; /* Locks width to a clean, phone-sized card on PC */
+        max-width: 580px !important;
         margin-left: auto !important;
         margin-right: auto !important;
     }
     
-    /* 4. TAB CONTAINER STYLING */
+    /* Tab Container */
     div[data-baseweb="tab-list"] {
         background-color: #0F172A !important;
         border-radius: 12px !important;
@@ -58,9 +44,8 @@ st.markdown("""
         margin-bottom: 12px !important;
     }
     
-    /* 5. TAB BUTTONS & HIGH-CONTRAST LABELS */
-    div[data-baseweb="tab-list"] button,
-    button[data-baseweb="tab"] {
+    /* Tab Buttons */
+    div[data-baseweb="tab-list"] button, button[data-baseweb="tab"] {
         background-color: #1E293B !important;
         border-radius: 8px !important;
         padding: 8px 12px !important;
@@ -69,10 +54,7 @@ st.markdown("""
         flex: 1 0 auto !important;
     }
     
-    div[data-baseweb="tab-list"] button *,
-    button[data-baseweb="tab"] *,
-    div[data-baseweb="tab-list"] p,
-    button[data-baseweb="tab"] p {
+    div[data-baseweb="tab-list"] button *, button[data-baseweb="tab"] *, div[data-baseweb="tab-list"] p, button[data-baseweb="tab"] p {
         color: #F8FAFC !important;
         font-weight: 700 !important;
         font-size: 13px !important;
@@ -81,24 +63,17 @@ st.markdown("""
         white-space: nowrap !important;
     }
     
-    /* Active Selected Tab */
-    button[data-baseweb="tab"][aria-selected="true"],
-    div[data-baseweb="tab-list"] button[aria-selected="true"] {
+    button[data-baseweb="tab"][aria-selected="true"], div[data-baseweb="tab-list"] button[aria-selected="true"] {
         background-color: #2563EB !important;
         border: 1px solid #60A5FA !important;
     }
-    
-    button[data-baseweb="tab"][aria-selected="true"] *,
-    div[data-baseweb="tab-list"] button[aria-selected="true"] * {
+    button[data-baseweb="tab"][aria-selected="true"] *, div[data-baseweb="tab-list"] button[aria-selected="true"] * {
         color: #FFFFFF !important;
         font-weight: 800 !important;
     }
-    
-    div[data-baseweb="tab-highlight"] {
-        display: none !important;
-    }
+    div[data-baseweb="tab-highlight"] { display: none !important; }
 
-    /* Hero Card */
+    /* UI Cards */
     .hero-card {
         background: linear-gradient(135deg, #1E3A8A 0%, #0F172A 100%);
         border: 1px solid #3B82F6;
@@ -111,7 +86,6 @@ st.markdown("""
     .metric-val { font-size: 26px; font-weight: 800; color: #38BDF8; }
     .metric-sub { font-size: 12px; color: #94A3B8; }
     
-    /* Stat Boxes */
     .stat-box {
         background-color: #1E293B;
         border: 1px solid #334155;
@@ -120,7 +94,6 @@ st.markdown("""
         text-align: center;
     }
     
-    /* Action Buttons */
     .stButton>button {
         width: 100%;
         border-radius: 12px;
@@ -133,7 +106,6 @@ st.markdown("""
         box-shadow: 0 2px 6px rgba(37,99,235,0.4);
     }
     
-    /* Badges */
     .badge-opt { background-color: #065F46; color: #6EE7B7; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
     .badge-warn { background-color: #7C2D12; color: #FDBA74; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
     .badge-biz { background-color: #312E81; color: #C7D2FE; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
@@ -141,7 +113,36 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. DATA CONNECTION & ACCOUNTS REGISTRY
+# 2. ROLLING DATE CALCULATION ENGINE
+# ==========================================
+today_dt = date.today()
+
+def get_next_recurring_date(target_day: int, ref_date: date) -> date:
+    """
+    Computes the NEXT upcoming date for recurring monthly schedules.
+    target_day = -1 indicates last day of month.
+    """
+    y, m = ref_date.year, ref_date.month
+    if target_day == -1:
+        last_day = calendar.monthrange(y, m)[1]
+        cand = date(y, m, last_day)
+        if cand < ref_date:
+            next_m = m + 1 if m < 12 else 1
+            next_y = y if m < 12 else y + 1
+            cand = date(next_y, next_m, calendar.monthrange(next_y, next_m)[1])
+        return cand
+    
+    max_d = calendar.monthrange(y, m)[1]
+    cand = date(y, m, min(target_day, max_d))
+    if cand < ref_date:
+        next_m = m + 1 if m < 12 else 1
+        next_y = y if m < 12 else y + 1
+        max_d_next = calendar.monthrange(next_y, next_m)[1]
+        cand = date(next_y, next_m, min(target_day, max_d_next))
+    return cand
+
+# ==========================================
+# 3. DATA CONNECTION & ACCOUNTS REGISTRY
 # ==========================================
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -160,53 +161,65 @@ def get_ledger_data():
 
 df_tx = get_ledger_data()
 
-# 1. Checking & Savings Accounts
 cash_registry = [
     {"name": "BofA 5522", "role": "Primary Operating Checking", "base": 251.67},
     {"name": "SECU 4987", "role": "Dedicated Home Savings / HYSA", "base": 4212.10}
 ]
 
-# 2. Personal Credit Cards (Report to FICO / AZEO Strategy)
-personal_cc_registry = [
-    {"name": "Chase 1993", "base": 517.70, "limit": 10600.00, "due": "Sep 01", "close": "Sep 04", "pay_window": "Aug 29 – Sep 01", "target": "$0.00", "is_primary": True},
-    {"name": "Chase 2207", "base": 9.52, "limit": 4900.00, "due": "Sep 01", "close": "Sep 04", "pay_window": "Leave balance", "is_azeo_active": True, "target": "~$10.00 (1%)"},
-    {"name": "BofA 5309", "base": 22.21, "limit": 7500.00, "due": "Aug 24", "close": "Aug 27", "pay_window": "By Aug 23", "target": "$0.00"},
-    {"name": "BofA 7197", "base": 37.12, "limit": 3500.00, "due": "Aug 24", "close": "Aug 27", "pay_window": "By Aug 23", "target": "$0.00"},
-    {"name": "Apple 1765", "base": 0.00, "limit": 2000.00, "due": "End of Mo.", "close": "End of Mo.", "pay_window": "N/A", "target": "$0.00"},
-    {"name": "TJX", "base": 0.00, "limit": 3200.00, "due": "5th of Mo.", "close": "~8th of Mo.", "pay_window": "N/A", "target": "$0.00"}
+# Personal CCs with recurring calendar days
+personal_cc_definitions = [
+    {"name": "Chase 1993", "base": 517.70, "limit": 10600.00, "due_day": 1, "close_day": 4, "is_primary": True, "target": "$0.00"},
+    {"name": "Chase 2207", "base": 9.52, "limit": 4900.00, "due_day": 1, "close_day": 4, "is_azeo_active": True, "target": "~$10.00 (1%)"},
+    {"name": "BofA 5309", "base": 22.21, "limit": 7500.00, "due_day": 24, "close_day": 27, "target": "$0.00"},
+    {"name": "BofA 7197", "base": 37.12, "limit": 3500.00, "due_day": 24, "close_day": 27, "target": "$0.00"},
+    {"name": "Apple 1765", "base": 0.00, "limit": 2000.00, "due_day": -1, "close_day": 3, "target": "$0.00"},
+    {"name": "TJX", "base": 0.00, "limit": 3200.00, "due_day": 5, "close_day": 8, "target": "$0.00"}
 ]
 
-# 3. Business Credit Cards (Does NOT report to personal credit)
-biz_cc_registry = [
-    {"name": "Chase 0431", "base": 505.07, "limit": 0.00, "due": "Sep 01", "close": "Sep 07", "pay_window": "By Sep 01", "is_business": True, "target": "Business Expense"}
+biz_cc_definitions = [
+    {"name": "Chase 0431", "base": 505.07, "limit": 0.00, "due_day": 1, "close_day": 7, "is_business": True, "target": "Business Expense"}
 ]
 
-# Compute Personal CC Balances
+# Build live personal CC list with dynamically rolling dates
 live_personal_cc = []
-for card in personal_cc_registry:
+for card in personal_cc_definitions:
     c_name = card["name"]
     spent = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "Expense")]["Amount"].sum()
     paid = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "CC Payment")]["Amount"].sum()
     current_bal = max(card["base"] + spent - paid, 0.0)
+    
+    # Calculate next rolling due and close dates
+    next_due = get_next_recurring_date(card["due_day"], today_dt)
+    next_close = get_next_recurring_date(card["close_day"], today_dt)
+    pay_by_date = next_due - timedelta(days=1)
     
     card_dict = dict(card)
     card_dict["current_balance"] = current_bal
     card_dict["utilization"] = (current_bal / card["limit"]) * 100 if card["limit"] > 0 else 0.0
+    card_dict["due_str"] = next_due.strftime("%b %d")
+    card_dict["close_str"] = next_close.strftime("%b %d")
+    card_dict["pay_by_str"] = f"By {pay_by_date.strftime('%b %d')}"
     live_personal_cc.append(card_dict)
 
-# Compute Business CC Balances
+# Build live business CC list with rolling dates
 live_biz_cc = []
-for card in biz_cc_registry:
+for card in biz_cc_definitions:
     c_name = card["name"]
     spent = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "Expense")]["Amount"].sum()
     paid = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "CC Payment")]["Amount"].sum()
     current_bal = max(card["base"] + spent - paid, 0.0)
     
+    next_due = get_next_recurring_date(card["due_day"], today_dt)
+    next_close = get_next_recurring_date(card["close_day"], today_dt)
+    pay_by_date = next_due - timedelta(days=1)
+    
     card_dict = dict(card)
     card_dict["current_balance"] = current_bal
+    card_dict["due_str"] = next_due.strftime("%b %d")
+    card_dict["close_str"] = next_close.strftime("%b %d")
+    card_dict["pay_by_str"] = f"By {pay_by_date.strftime('%b %d')}"
     live_biz_cc.append(card_dict)
 
-# Compute Total Cash and Net Liquidity
 total_cash = sum(c["base"] for c in cash_registry)
 personal_cc_debt = sum(c["current_balance"] for c in live_personal_cc)
 personal_cc_limit = sum(c["limit"] for c in live_personal_cc)
@@ -221,7 +234,7 @@ goal_progress = min(total_cash / HOME_GOAL, 1.0)
 remaining_goal = max(HOME_GOAL - total_cash, 0.0)
 
 # ==========================================
-# 3. AI EXECUTIVE SUMMARY
+# 4. AI EXECUTIVE SUMMARY
 # ==========================================
 def generate_ai_insights():
     try:
@@ -231,21 +244,17 @@ def generate_ai_insights():
             model = genai.GenerativeModel("gemini-1.5-flash")
             prompt = f"""
             Act as an elite financial advisor. Provide a concise 2-sentence update:
-            - Net Liquid Cash: ${net_liquid_cash:,.2f} (Total Cash: ${total_cash:,.2f}, Personal CCs: ${personal_cc_debt:,.2f}, Biz CC Chase 0431: ${biz_cc_debt:,.2f}).
-            - Personal Credit Util: {personal_utilization:.2f}% across ${personal_cc_limit:,.2f} limit.
-            - Upcoming Actions: Pay BofA 5309 ($22.21) & BofA 7197 ($37.12) by Aug 23. Pay Chase 1993 ($517.70) & Biz Chase 0431 ($505.07) by Sep 1. Keep Chase 2207 at $9.52 for AZEO boost.
+            - Net Liquid Cash: ${net_liquid_cash:,.2f} (Total Cash: ${total_cash:,.2f}, Personal CCs:${personal_cc_debt:,.2f}, Biz CC: ${biz_cc_debt:,.2f}).             - Personal Credit Util: {personal_utilization:.2f}\% across${personal_cc_limit:,.2f} limit.
+            - Upcoming Actions: Pay BofA 5309 and BofA 7197 by Aug 23. Pay Chase 1993 and Chase 0431 by Aug 31. Keep Chase 2207 at $9.52 for AZEO boost.
             """
             response = model.generate_content(prompt)
-            # Escape dollar signs so Streamlit does not render text as LaTeX math
             return response.text.replace("$", r"\$")
     except Exception:
         pass
-    
-    # Fallback with escaped dollar signs (\$) to prevent LaTeX math bug
-    return r"💡 **Key Next Steps:** Pay off BofA 5309 (\$22.21) & BofA 7197 (\$37.12) by August 23 to report \$0 on Aug 27. Maintain Chase 2207 at ~\$10 for AZEO personal credit optimization."
-    
+    return r"💡 **Key Next Steps:** Pay off BofA 5309 (\$22.21) & BofA 7197 (\$37.12) by August 23 to report \$0 on statement close. Maintain Chase 2207 at ~\$10 for AZEO personal credit optimization."
+
 # ==========================================
-# 4. APP TABS
+# 5. APP TABS
 # ==========================================
 tabs = st.tabs(["⚡ Command Center", "📊 Analytics & Charts", "💳 Accounts & Credit Hub", "🏠 Home Goal"])
 
@@ -260,7 +269,7 @@ with tabs[0]:
             <span style="color:#93C5FD; font-size:12px;">Personal Util: {personal_utilization:.2f}%</span>
         </div>
         <div class="metric-val">${net_liquid_cash:,.2f}</div>
-        <div class="metric-sub">Total Cash: ${total_cash:,.2f} | Personal Debt: ${personal_cc_debt:,.2f} | Biz Debt: ${biz_cc_debt:,.2f}</div>
+        <div class="metric-sub">Total Cash: ${total_cash:,.2f} | Personal Debt: ${personal_cc_debt:,.2f} \vert{} Biz Debt:${biz_cc_debt:,.2f}</div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -348,7 +357,7 @@ with tabs[0]:
         with st.form("log_payment_form", clear_on_submit=True):
             pay_amt = st.number_input("Payment Amount ($)", min_value=0.01, step=1.00, format="%.2f", key="f_pay_amt")
             from_account = st.selectbox("Paid From", ["BofA 5522 (Checking)", "SECU 4987 (Savings)"], key="f_pay_from")
-            all_ccs = [c["name"] for c in personal_cc_registry] + [c["name"] for c in biz_cc_registry]
+            all_ccs = [c["name"] for c in personal_cc_definitions] + [c["name"] for c in biz_cc_definitions]
             target_card = st.selectbox("Credit Card Paid", all_ccs, key="f_pay_to")
             pay_date = st.date_input("Date", value=datetime.today(), key="f_pay_date")
             
@@ -447,13 +456,13 @@ with tabs[2]:
         
         if c.get("is_azeo_active"):
             badge = '<span class="badge-opt">✅ AZEO ACTIVE (~1%)</span>'
-            action = f"Leave ~{c['target']} to report on {c['close']}"
+            action = f"Leave ~{c['target']} to report on {c['close_str']}"
         elif bal > 0:
             badge = '<span class="badge-warn">⚠️ PAY TO $0</span>'
-            action = f"Pay ${bal:.2f} by {c['pay_window']} (Closes {c['close']})"
+            action = f"Pay ${bal:.2f} {c['pay_by_str']} (Due {c['due_str']})"
         else:
             badge = '<span class="badge-opt">✅ ZERO REPORTING ($0)</span>'
-            action = f"Due: {c['due']} | Closes: {c['close']}"
+            action = f"Next Due: {c['due_str']} | Closes: {c['close_str']}"
             
         st.markdown(f"""
         <div style="background:#1E293B; border-radius:10px; padding:12px 14px; margin-bottom:8px; border:1px solid #334155;">
@@ -492,7 +501,7 @@ with tabs[2]:
                 </div>
             </div>
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
-                <span style="font-size:12px; color:#CBD5E1;">Due: {c['due']} | Closes: {c['close']} (Pay by {c['pay_window']})</span>
+                <span style="font-size:12px; color:#CBD5E1;">Due: {c['due_str']} | Closes: {c['close_str']} ({c['pay_by_str']})</span>
                 <div><span class="badge-biz">💼 BUSINESS</span></div>
             </div>
         </div>
@@ -525,13 +534,4 @@ with tabs[3]:
     st.markdown("""
     ---
     **10% Down Acquisition Strategy Summary:**
-    * **Target Price:** $300,000 | **Down Payment (10%):** $30,000
-    * **Estimated Closing & Prepaids:** $11,000
-    * **Credits & Assistance Applied:** -$21,000
-      * *2.5% Buyer Agent Commission Credit:* -$7,500
-      * *Maryland Mortgage Program (MMP) DPA:* -$9,000
-      * *Seller Concessions (1.5%):* -$4,500
-    * **Net Cash at Closing:** $20,000
-    * **Post-Closing 3-Mo Reserves:** $6,500
-    * **Total Liquid Target:** **$26,500**
-    """)
+    * **Target Price:** $300,000 |
