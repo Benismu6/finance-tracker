@@ -236,11 +236,14 @@ def generate_ai_insights():
             - Upcoming Actions: Pay BofA 5309 ($22.21) & BofA 7197 ($37.12) by Aug 23. Pay Chase 1993 ($517.70) & Biz Chase 0431 ($505.07) by Sep 1. Keep Chase 2207 at $9.52 for AZEO boost.
             """
             response = model.generate_content(prompt)
-            return response.text
+            # Escape dollar signs so Streamlit does not render text as LaTeX math
+            return response.text.replace("$", r"\$")
     except Exception:
         pass
-    return "💡 **Key Next Steps:** Pay off BofA 5309 ($22.21) & BofA 7197 ($37.12) by August 23 to report $0 on Aug 27. Maintain Chase 2207 at ~$10 for AZEO personal credit optimization."
-
+    
+    # Fallback with escaped dollar signs (\$) to prevent LaTeX math bug
+    return r"💡 **Key Next Steps:** Pay off BofA 5309 (\$22.21) & BofA 7197 (\$37.12) by August 23 to report \$0 on Aug 27. Maintain Chase 2207 at ~\$10 for AZEO personal credit optimization."
+    
 # ==========================================
 # 4. APP TABS
 # ==========================================
