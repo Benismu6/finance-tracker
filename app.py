@@ -7,7 +7,7 @@ from streamlit_gsheets import GSheetsConnection
 import google.generativeai as genai
 
 # ==========================================
-# 1. PAGE SETUP & HIGH-CONTRAST CSS
+# 1. PAGE SETUP & FULL-SCREEN MOBILE CSS
 # ==========================================
 st.set_page_config(
     page_title="Financial Command Hub",
@@ -18,10 +18,33 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    .block-container { padding-top: 1rem; padding-bottom: 2rem; padding-left: 0.8rem; padding-right: 0.8rem; }
+    /* 1. HIDE STREAMLIT TOP HEADER BAR (FORK / GITHUB / 3 DOTS) */
+    header[data-testid="stHeader"],
+    .stAppHeader,
+    header {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0px !important;
+    }
     
-    /* === BULLETPROOF STREAMLIT TAB VISIBILITY FIX === */
-    /* Target the tab container */
+    /* 2. HIDE TOP DECORATION & FOOTER */
+    div[data-testid="stDecoration"],
+    #MainMenu,
+    footer {
+        display: none !important;
+        visibility: hidden !important;
+    }
+
+    /* 3. MOBILE CONTAINER PADDING (ENSURES TABS SIT PROPERLY AT TOP) */
+    .block-container {
+        padding-top: 1.2rem !important;
+        padding-bottom: 2rem !important;
+        padding-left: 0.8rem !important;
+        padding-right: 0.8rem !important;
+        max-width: 100% !important;
+    }
+    
+    /* 4. TAB CONTAINER STYLING */
     div[data-baseweb="tab-list"] {
         background-color: #0F172A !important;
         border-radius: 12px !important;
@@ -30,9 +53,10 @@ st.markdown("""
         display: flex !important;
         width: 100% !important;
         overflow-x: auto !important;
+        margin-bottom: 12px !important;
     }
     
-    /* Target individual tab buttons */
+    /* 5. TAB BUTTONS & HIGH-CONTRAST LABELS */
     div[data-baseweb="tab-list"] button,
     button[data-baseweb="tab"] {
         background-color: #1E293B !important;
@@ -40,9 +64,9 @@ st.markdown("""
         padding: 8px 12px !important;
         margin: 2px !important;
         border: 1px solid #334155 !important;
+        flex: 1 0 auto !important;
     }
     
-    /* Target ALL text, p-tags, and spans inside tab buttons */
     div[data-baseweb="tab-list"] button *,
     button[data-baseweb="tab"] *,
     div[data-baseweb="tab-list"] p,
@@ -52,10 +76,10 @@ st.markdown("""
         font-size: 13px !important;
         opacity: 1 !important;
         visibility: visible !important;
-        display: inline-block !important;
+        white-space: nowrap !important;
     }
     
-    /* Selected / Active Tab Highlight */
+    /* Active Selected Tab */
     button[data-baseweb="tab"][aria-selected="true"],
     div[data-baseweb="tab-list"] button[aria-selected="true"] {
         background-color: #2563EB !important;
@@ -68,7 +92,6 @@ st.markdown("""
         font-weight: 800 !important;
     }
     
-    /* Hide the default orange/red underline indicator */
     div[data-baseweb="tab-highlight"] {
         display: none !important;
     }
@@ -95,7 +118,7 @@ st.markdown("""
         text-align: center;
     }
     
-    /* Full-width action buttons */
+    /* Action Buttons */
     .stButton>button {
         width: 100%;
         border-radius: 12px;
