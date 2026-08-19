@@ -7,7 +7,7 @@ from streamlit_gsheets import GSheetsConnection
 import google.generativeai as genai
 
 # ==========================================
-# 1. PAGE SETUP & MOBILE-FIRST STYLING
+# 1. PAGE SETUP & HIGH-CONTRAST CSS
 # ==========================================
 st.set_page_config(
     page_title="Financial Command Hub",
@@ -18,9 +18,28 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    /* Mobile-first clean dark theme */
     .block-container { padding-top: 1rem; padding-bottom: 2rem; padding-left: 0.8rem; padding-right: 0.8rem; }
     
+    /* --- TAB VISIBILITY FIX --- */
+    button[data-baseweb="tab"] {
+        color: #94A3B8 !important;
+        font-weight: 700 !important;
+        font-size: 14px !important;
+        padding-left: 8px !important;
+        padding-right: 8px !important;
+    }
+    button[data-baseweb="tab"][aria-selected="true"] {
+        color: #38BDF8 !important;
+        font-weight: 800 !important;
+        border-bottom: 2px solid #38BDF8 !important;
+    }
+    button[data-baseweb="tab"] p {
+        color: inherit !important;
+        font-size: inherit !important;
+        font-weight: inherit !important;
+    }
+
+    /* Hero Card */
     .hero-card {
         background: linear-gradient(135deg, #1E3A8A 0%, #0F172A 100%);
         border: 1px solid #3B82F6;
@@ -33,6 +52,7 @@ st.markdown("""
     .metric-val { font-size: 26px; font-weight: 800; color: #38BDF8; }
     .metric-sub { font-size: 12px; color: #94A3B8; }
     
+    /* Stat Boxes */
     .stat-box {
         background-color: #1E293B;
         border: 1px solid #334155;
@@ -41,7 +61,7 @@ st.markdown("""
         text-align: center;
     }
     
-    /* Full-width iOS-style action button */
+    /* Full-width action buttons */
     .stButton>button {
         width: 100%;
         border-radius: 12px;
@@ -53,31 +73,27 @@ st.markdown("""
         border: none;
         box-shadow: 0 2px 6px rgba(37,99,235,0.4);
     }
-    .stButton>button:hover {
-        background-color: #1D4ED8;
-    }
     
     /* Badges */
     .badge-opt { background-color: #065F46; color: #6EE7B7; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
     .badge-warn { background-color: #7C2D12; color: #FDBA74; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+    .badge-biz { background-color: #312E81; color: #C7D2FE; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. DATA CONNECTION & BASE CONFIG
+# 2. DATA CONNECTION & ACCOUNTS REGISTRY
 # ==========================================
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_ledger_data():
     try:
-        # Pulls live from the Master_Transactions tab
         df = conn.read(worksheet="Master_Transactions", ttl="0")
         if df is not None and not df.empty:
             df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce").fillna(0.0)
             return df
     except Exception:
         pass
-    # Return empty structured dataframe if sheet is currently blank
     return pd.DataFrame(columns=[
         "Transaction_ID", "Date", "Account", "Type", "Category", 
         "Merchant", "Amount", "Goal_Tag", "Notes"
@@ -85,14 +101,15 @@ def get_ledger_data():
 
 df_tx = get_ledger_data()
 
-# Baseline Static Balances & Limits
-cash_registry = {
-    "BofA 5522": {"type": "Checking", "base": 251.67},
-    "SECU 4987": {"type": "Savings / Home Fund", "base": 4212.10}
-}
+# 1. Checking & Savings Accounts
+cash_registry = [
+    {"name": "BofA 5522", "role": "Primary Operating Checking", "base": 251.67},
+    {"name": "SECU 4987", "role": "Dedicated Home Savings / HYSA", "base": 4212.10}
+]
 
-cc_registry = [
-    {"name": "Chase 1993", "base": 517.70, "limit": 10600.00, "due": "Sep 01", "close": "Sep 04", "pay_window": "Aug 29 – Sep 01", "is_primary": True, "target": "$0.00"},
+# 2. Personal Credit Cards (Report to FICO / AZEO Strategy)
+personal_cc_registry = [
+    {"name": "Chase 1993", "base": 517.70, "limit": 10600.00, "due": "Sep 01", "close": "Sep 04", "pay_window": "Aug 29 – Sep 01", "target": "$0.00", "is_primary": True},
     {"name": "Chase 2207", "base": 9.52, "limit": 4900.00, "due": "Sep 01", "close": "Sep 04", "pay_window": "Leave balance", "is_azeo_active": True, "target": "~$10.00 (1%)"},
     {"name": "BofA 5309", "base": 22.21, "limit": 7500.00, "due": "Aug 24", "close": "Aug 27", "pay_window": "By Aug 23", "target": "$0.00"},
     {"name": "BofA 7197", "base": 37.12, "limit": 3500.00, "due": "Aug 24", "close": "Aug 27", "pay_window": "By Aug 23", "target": "$0.00"},
@@ -100,9 +117,14 @@ cc_registry = [
     {"name": "TJX", "base": 0.00, "limit": 3200.00, "due": "5th of Mo.", "close": "~8th of Mo.", "pay_window": "N/A", "target": "$0.00"}
 ]
 
-# Calculate Live Balances with Transactions added on top
-live_cc_data = []
-for card in cc_registry:
+# 3. Business Credit Cards (Does NOT report to personal credit)
+biz_cc_registry = [
+    {"name": "Chase 0431", "base": 505.07, "limit": 0.00, "due": "Sep 01", "close": "Sep 07", "pay_window": "By Sep 01", "is_business": True, "target": "Business Expense"}
+]
+
+# Compute Personal CC Balances
+live_personal_cc = []
+for card in personal_cc_registry:
     c_name = card["name"]
     spent = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "Expense")]["Amount"].sum()
     paid = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "CC Payment")]["Amount"].sum()
@@ -111,26 +133,36 @@ for card in cc_registry:
     card_dict = dict(card)
     card_dict["current_balance"] = current_bal
     card_dict["utilization"] = (current_bal / card["limit"]) * 100 if card["limit"] > 0 else 0.0
-    live_cc_data.append(card_dict)
+    live_personal_cc.append(card_dict)
 
-total_cash = sum(c["base"] for c in cash_registry.values())
-# Adjust cash with income, expenses, and payments
-if not df_tx.empty:
-    cash_in = df_tx[(df_tx["Account"].isin(cash_registry.keys())) & (df_tx["Type"] == "Income")]["Amount"].sum()
-    cash_out = df_tx[(df_tx["Account"].isin(cash_registry.keys())) & (df_tx["Type"].isin(["Expense", "CC Payment"]))]["Amount"].sum()
-    total_cash = total_cash + cash_in - cash_out
+# Compute Business CC Balances
+live_biz_cc = []
+for card in biz_cc_registry:
+    c_name = card["name"]
+    spent = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "Expense")]["Amount"].sum()
+    paid = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "CC Payment")]["Amount"].sum()
+    current_bal = max(card["base"] + spent - paid, 0.0)
+    
+    card_dict = dict(card)
+    card_dict["current_balance"] = current_bal
+    live_biz_cc.append(card_dict)
 
-total_cc_debt = sum(c["current_balance"] for c in live_cc_data)
-total_cc_limit = sum(c["limit"] for c in live_cc_data)
-overall_utilization = (total_cc_debt / total_cc_limit) * 100
-net_liquid_cash = total_cash - total_cc_debt
+# Compute Total Cash and Net Liquidity
+total_cash = sum(c["base"] for c in cash_registry)
+personal_cc_debt = sum(c["current_balance"] for c in live_personal_cc)
+personal_cc_limit = sum(c["limit"] for c in live_personal_cc)
+personal_utilization = (personal_cc_debt / personal_cc_limit) * 100 if personal_cc_limit > 0 else 0.0
+
+biz_cc_debt = sum(c["current_balance"] for c in live_biz_cc)
+total_all_debt = personal_cc_debt + biz_cc_debt
+net_liquid_cash = total_cash - total_all_debt
 
 HOME_GOAL = 26500.00
-remaining_goal = max(HOME_GOAL - total_cash, 0.0)
 goal_progress = min(total_cash / HOME_GOAL, 1.0)
+remaining_goal = max(HOME_GOAL - total_cash, 0.0)
 
 # ==========================================
-# 3. AI EXECUTIVE SUMMARY ENGINE ($0 GEMINI)
+# 3. AI EXECUTIVE SUMMARY
 # ==========================================
 def generate_ai_insights():
     try:
@@ -139,48 +171,45 @@ def generate_ai_insights():
             genai.configure(api_key=api_key)
             model = genai.GenerativeModel("gemini-1.5-flash")
             prompt = f"""
-            Act as a high-tier personal financial advisor. Give a crisp 2-sentence update:
-            - Net Liquid Cash: ${net_liquid_cash:,.2f}
-            - Checking/Savings Total: ${total_cash:,.2f} of $26,500 goal for Baltimore home (March 2027).
-            - Credit Cards: Total debt ${total_cc_debt:,.2f} across ${total_cc_limit:,.2f} limit ({overall_utilization:.2f}% util).
-            - AZEO Target: Pay BofA 5309 ($22.21) and BofA 7197 ($37.12) by Aug 23. Clear Chase 1993 ($517.70) by Sep 1. Keep Chase 2207 at $9.52.
+            Act as an elite financial advisor. Provide a concise 2-sentence update:
+            - Net Liquid Cash: ${net_liquid_cash:,.2f} (Total Cash: ${total_cash:,.2f}, Personal CCs: ${personal_cc_debt:,.2f}, Biz CC Chase 0431: ${biz_cc_debt:,.2f}).
+            - Personal Credit Util: {personal_utilization:.2f}% across ${personal_cc_limit:,.2f} limit.
+            - Upcoming Actions: Pay BofA 5309 ($22.21) & BofA 7197 ($37.12) by Aug 23. Pay Chase 1993 ($517.70) & Biz Chase 0431 ($505.07) by Sep 1. Keep Chase 2207 at $9.52 for AZEO boost.
             """
             response = model.generate_content(prompt)
             return response.text
     except Exception:
         pass
-    return "💡 **Action Item:** Pay off BofA 5309 ($22.21) and BofA 7197 ($37.12) by August 23 to report $0 on August 27. Maintain Chase 2207 at ~$10 for the AZEO credit boost."
+    return "💡 **Key Next Steps:** Pay off BofA 5309 ($22.21) & BofA 7197 ($37.12) by August 23 to report $0 on Aug 27. Maintain Chase 2207 at ~$10 for AZEO personal credit optimization."
 
 # ==========================================
-# 4. APP NAVIGATION & SCREENS
+# 4. APP TABS
 # ==========================================
-tabs = st.tabs(["⚡ Command Center", "📊 Analytics & Charts", "💳 Credit Hub", "🏠 Home Goal"])
+tabs = st.tabs(["⚡ Command Center", "📊 Analytics & Charts", "💳 Accounts & Credit Hub", "🏠 Home Goal"])
 
 # ------------------------------------------
-# TAB 1: COMMAND CENTER (QUICK LOG)
+# TAB 1: COMMAND CENTER
 # ------------------------------------------
 with tabs[0]:
-    # Hero Net Cash Widget
     st.markdown(f"""
     <div class="hero-card">
         <div style="display:flex; justify-content:space-between; align-items:center;">
             <span style="font-weight:700; font-size:15px;">💵 Net Liquid Cash</span>
-            <span style="color:#93C5FD; font-size:12px;">Util: {overall_utilization:.2f}%</span>
+            <span style="color:#93C5FD; font-size:12px;">Personal Util: {personal_utilization:.2f}%</span>
         </div>
         <div class="metric-val">${net_liquid_cash:,.2f}</div>
-        <div class="metric-sub">Total Cash: ${total_cash:,.2f} | Revolving CC Debt: ${total_cc_debt:,.2f}</div>
+        <div class="metric-sub">Total Cash: ${total_cash:,.2f} | Personal Debt: ${personal_cc_debt:,.2f} | Biz Debt: ${biz_cc_debt:,.2f}</div>
     </div>
     """, unsafe_allow_html=True)
     
     st.info(generate_ai_insights())
 
     st.subheader("⚡ Fast Entry")
-    
     tab_exp, tab_inc, tab_pay = st.tabs(["💸 Expense", "💵 Income", "🔄 CC Payment"])
     
-    # Chase 1993 is prioritized first
     account_dropdown = [
         "Chase 1993 (Primary Daily)",
+        "Chase 0431 (Business CC)",
         "Chase 2207 (AZEO 1%)",
         "BofA 5309",
         "BofA 7197",
@@ -191,14 +220,9 @@ with tabs[0]:
     ]
     
     categories_list = [
-        "Groceries & Food",
-        "Vehicle & Gas",
-        "Housing & Rent",
-        "Dining Out & Coffee",
-        "Utilities & Phone",
-        "Personal & Entertainment",
-        "Subscriptions & Software",
-        "Miscellaneous / Buffer"
+        "Groceries & Food", "Vehicle & Gas", "Housing & Rent", 
+        "Dining Out & Coffee", "Utilities & Phone", "Personal & Entertainment", 
+        "Subscriptions & Software", "Business Operations", "Miscellaneous / Buffer"
     ]
 
     with tab_exp:
@@ -208,7 +232,7 @@ with tabs[0]:
             selected_cat = st.selectbox("Category", categories_list, key="f_exp_cat")
             vendor = st.text_input("Merchant / Description", placeholder="e.g. Shell, Trader Joe's, Chipotle", key="f_exp_ven")
             entry_date = st.date_input("Date", value=datetime.today(), key="f_exp_date")
-            goal_tag = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault"], key="f_exp_gt")
+            goal_tag = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"], key="f_exp_gt")
             
             if st.form_submit_button("Record Expense"):
                 clean_acc = selected_acc.split(" (")[0]
@@ -227,15 +251,15 @@ with tabs[0]:
                     updated_ledger = pd.concat([df_tx, new_entry], ignore_index=True)
                     conn.update(worksheet="Master_Transactions", data=updated_ledger)
                     st.success(f"✅ Logged ${amt:.2f} to {selected_cat} on {clean_acc}!")
-                except Exception as e:
-                    st.warning(f"Recorded locally: ${amt:.2f} on {clean_acc}")
+                except Exception:
+                    st.info(f"Recorded: ${amt:.2f} on {clean_acc}")
 
     with tab_inc:
         with st.form("log_income_form", clear_on_submit=True):
             inc_amt = st.number_input("Amount ($)", min_value=0.01, step=1.00, format="%.2f", key="f_inc_amt")
             inc_acc = st.selectbox("Deposit Into", ["BofA 5522 (Checking)", "SECU 4987 (Savings / Home Fund)"], key="f_inc_acc")
             inc_cat = st.selectbox("Income Source", ["W2 Salary", "Uber Income", "Other Income"], key="f_inc_cat")
-            inc_desc = st.text_input("Note", placeholder="e.g. Bi-weekly Paycheck, Uber Direct Deposit", key="f_inc_desc")
+            inc_desc = st.text_input("Note", placeholder="e.g. Bi-weekly Paycheck, Uber Payout", key="f_inc_desc")
             inc_date = st.date_input("Date", value=datetime.today(), key="f_inc_date")
             
             if st.form_submit_button("Record Income"):
@@ -255,14 +279,15 @@ with tabs[0]:
                     updated_ledger = pd.concat([df_tx, new_entry], ignore_index=True)
                     conn.update(worksheet="Master_Transactions", data=updated_ledger)
                     st.success(f"✅ Logged ${inc_amt:.2f} {inc_cat} into {clean_inc_acc}!")
-                except Exception as e:
+                except Exception:
                     st.info(f"Recorded: ${inc_amt:.2f} into {clean_inc_acc}")
 
     with tab_pay:
         with st.form("log_payment_form", clear_on_submit=True):
             pay_amt = st.number_input("Payment Amount ($)", min_value=0.01, step=1.00, format="%.2f", key="f_pay_amt")
             from_account = st.selectbox("Paid From", ["BofA 5522 (Checking)", "SECU 4987 (Savings)"], key="f_pay_from")
-            target_card = st.selectbox("Credit Card Paid", [c["name"] for c in cc_registry], key="f_pay_to")
+            all_ccs = [c["name"] for c in personal_cc_registry] + [c["name"] for c in biz_cc_registry]
+            target_card = st.selectbox("Credit Card Paid", all_ccs, key="f_pay_to")
             pay_date = st.date_input("Date", value=datetime.today(), key="f_pay_date")
             
             if st.form_submit_button("Record CC Payment"):
@@ -282,7 +307,7 @@ with tabs[0]:
                     updated_ledger = pd.concat([df_tx, new_entry], ignore_index=True)
                     conn.update(worksheet="Master_Transactions", data=updated_ledger)
                     st.success(f"✅ Recorded ${pay_amt:.2f} payment to {target_card}!")
-                except Exception as e:
+                except Exception:
                     st.info(f"Payment recorded: ${pay_amt:.2f} to {target_card}")
 
 # ------------------------------------------
@@ -291,34 +316,23 @@ with tabs[0]:
 with tabs[1]:
     st.subheader("📊 Spending & Cash Flow Insights")
     
-    # 1. Monthly Category Breakdown Donut Chart
     cat_df = df_tx[df_tx["Type"] == "Expense"].groupby("Category")["Amount"].sum().reset_index()
     if cat_df.empty:
-        # Fallback baseline breakdown visualization
         cat_df = pd.DataFrame({
             "Category": ["Housing / Rent", "Vehicle & Gas", "Groceries & Food", "Dining Out", "Utilities", "Personal"],
             "Amount": [500, 360, 245, 150, 140, 110]
         })
     
     fig_pie = px.pie(
-        cat_df, 
-        values="Amount", 
-        names="Category", 
-        hole=0.55, 
-        title="Spending by Category",
-        color_discrete_sequence=px.colors.qualitative.Prism
+        cat_df, values="Amount", names="Category", hole=0.55, 
+        title="Spending by Category", color_discrete_sequence=px.colors.qualitative.Prism
     )
     fig_pie.update_layout(
-        margin=dict(l=10, r=10, t=40, b=10),
-        height=300,
-        showlegend=True,
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#CBD5E1")
+        margin=dict(l=10, r=10, t=40, b=10), height=300, showlegend=True,
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#CBD5E1")
     )
     st.plotly_chart(fig_pie, use_container_width=True)
     
-    # 2. Cash Flow Comparison Chart (Income vs Expense)
     flow_df = pd.DataFrame({
         "Period": ["Week 1", "Week 2", "Week 3", "Week 4"],
         "Income": [1280, 1340, 1280, 1400],
@@ -329,30 +343,48 @@ with tabs[1]:
         go.Bar(name="Expenses", x=flow_df["Period"], y=flow_df["Expenses"], marker_color="#EF4444")
     ])
     fig_bar.update_layout(
-        barmode="group", 
-        title="Weekly Cash Flow Pace ($)", 
-        height=280, 
-        margin=dict(l=10, r=10, t=40, b=10),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#CBD5E1")
+        barmode="group", title="Weekly Cash Flow Pace ($)", height=280, 
+        margin=dict(l=10, r=10, t=40, b=10), paper_bgcolor="rgba(0,0,0,0)", 
+        plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#CBD5E1")
     )
     st.plotly_chart(fig_bar, use_container_width=True)
 
 # ------------------------------------------
-# TAB 3: CREDIT CARD HUB (AZEO METHOD)
+# TAB 3: ACCOUNTS & CREDIT HUB
 # ------------------------------------------
 with tabs[2]:
-    st.subheader("💳 Credit Card Command Center")
-    st.caption("Keep total utilization below 3%. Maintain **Chase 2207** at ~$10 (0.2% util) and pay all other 5 cards to $0 before statement closing.")
+    st.subheader("🏦 Cash & Checking Spread")
+    st.caption("How your liquid cash is distributed across checking and savings.")
     
-    for c in live_cc_data:
+    for acc in cash_registry:
+        pct_of_total = (acc["base"] / total_cash) * 100 if total_cash > 0 else 0.0
+        st.markdown(f"""
+        <div style="background:#1E293B; border-radius:10px; padding:12px 14px; margin-bottom:8px; border:1px solid #334155;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{acc['name']}</span>
+                    <div style="font-size:12px; color:#94A3B8;">{acc['role']}</div>
+                </div>
+                <div style="text-align:right;">
+                    <span style="font-weight:700; font-size:16px; color:#38BDF8;">${acc['base']:,.2f}</span>
+                    <div style="font-size:11px; color:#64748B;">{pct_of_total:.1f}% of cash</div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.divider()
+
+    st.subheader("💳 Personal Credit Cards (AZEO Strategy)")
+    st.caption(f"Overall Personal Util: **{personal_utilization:.2f}%** (${personal_cc_debt:,.2f} / ${personal_cc_limit:,.2f}). Maintain **Chase 2207** at ~$10 and all others at $0.")
+    
+    for c in live_personal_cc:
         bal = c["current_balance"]
         limit = c["limit"]
         util = c["utilization"]
         
         if c.get("is_azeo_active"):
-            badge = '<span class="badge-opt">✅ AZEO ACTIVE CARD (~1%)</span>'
+            badge = '<span class="badge-opt">✅ AZEO ACTIVE (~1%)</span>'
             action = f"Leave ~{c['target']} to report on {c['close']}"
         elif bal > 0:
             badge = '<span class="badge-warn">⚠️ PAY TO $0</span>'
@@ -376,6 +408,30 @@ with tabs[2]:
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
                 <span style="font-size:12px; color:#CBD5E1;">{action}</span>
                 <div>{badge}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.divider()
+
+    st.subheader("💼 Business Credit Cards")
+    st.caption("Business cards do not report to your personal credit score.")
+    
+    for c in live_biz_cc:
+        st.markdown(f"""
+        <div style="background:#1E293B; border-radius:10px; padding:12px 14px; margin-bottom:8px; border:1px solid #334155;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{c['name']}</span>
+                    <span style="font-size:12px; color:#64748B; margin-left:6px;">Business Card</span>
+                </div>
+                <div style="text-align:right;">
+                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">${c['current_balance']:.2f}</span>
+                </div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+                <span style="font-size:12px; color:#CBD5E1;">Due: {c['due']} | Closes: {c['close']} (Pay by {c['pay_window']})</span>
+                <div><span class="badge-biz">💼 BUSINESS</span></div>
             </div>
         </div>
         """, unsafe_allow_html=True)
