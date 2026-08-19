@@ -383,69 +383,182 @@ with tabs[0]:
                     st.info(f"Payment recorded: ${pay_amt:.2f} to {target_card}")
 
 # ------------------------------------------
-# TAB 2: ANALYTICS & CHARTS (100% DYNAMIC)
+# TAB 2: ANALYTICS & CHARTS (STACKED BLOCKS)
 # ------------------------------------------
 with tabs[1]:
-    st.subheader("📊 Spending & Cash Flow Insights")
-    
-    # 1. Real-time Expenses by Category
-    expense_data = df_tx[df_tx["Type"] == "Expense"]
-    
-    if not expense_data.empty:
-        cat_df = expense_data.groupby("Category")["Amount"].sum().reset_index()
-        
-        fig_pie = px.pie(
-            cat_df, 
-            values="Amount", 
-            names="Category", 
-            hole=0.55, 
-            title="Actual Spending by Category",
-            color_discrete_sequence=px.colors.qualitative.Prism
+    st.subheader("📊 Financial Analytics & Trends")
+
+    # Initialize navigation session states
+    if "selected_date" not in st.session_state:
+        st.session_state.selected_date = date.today()
+
+    # --- GLOBAL JUMP-TO-DATE CALENDAR ---
+    with st.expander("📅 Jump to Specific Date / Past Year", expanded=False):
+        picked_date = st.date_input(
+            "Select any date to view historical analytics:",
+            value=st.session_state.selected_date,
+            key="jump_calendar_picker"
         )
-        fig_pie.update_layout(
-            margin=dict(l=10, r=10, t=40, b=10),
-            height=320,
-            showlegend=True,
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#CBD5E1")
-        )
-        st.plotly_chart(fig_pie, use_container_width=True)
+        if picked_date != st.session_state.selected_date:
+            st.session_state.selected_date = picked_date
+            st.rerun()
+
+    ref_date = st.session_state.selected_date
+
+    # Prepare DataFrame with clean datetime objects
+    df_clean = df_tx.copy() if (df_tx is not None and not df_tx.empty) else pd.DataFrame(columns=["Date", "Type", "Category", "Amount"])
+    if not df_clean.empty and "Date" in df_clean.columns:
+        df_clean["Date_DT"] = pd.to_datetime(df_clean["Date"], errors="coerce").dt.date
+        df_clean["Amount"] = pd.to_numeric(df_clean["Amount"], errors="coerce").fillna(0.0)
     else:
-        st.info("ℹ️ **No expenses recorded yet.** Once you log expenses in the Command Center, your live spending breakdown will appear here.")
+        df_clean["Date_DT"] = pd.Series(dtype="object")
+
+    # ==========================================
+    # BLOCK 1: WEEKLY ANALYTICS (TOP BLOCK)
+    # ==========================================
+    # Calculate Monday-to-Sunday boundaries for ref_date
+    week_start = ref_date - timedelta(days=ref_date.weekday())
+    week_end = week_start + timedelta(days=6)
+
+    st.markdown("### 🗓️ Weekly Analytics")
+    
+    # Arrow Navigation Controls for Week
+    w_col1, w_col2, w_col3 = st.columns([1, 4, 1])
+    with w_col1:
+        if st.button("◀", key="prev_week_btn", help="Previous Week"):
+            st.session_state.selected_date = ref_date - timedelta(days=7)
+            st.rerun()
+    with w_col2:
+        st.markdown(
+            f"<div style='text-align:center; font-weight:700; font-size:14px; color:#38BDF8; padding-top:8px;'>"
+            f"{week_start.strftime('%b %d')} – {week_end.strftime('%b %d, %Y')}</div>",
+            unsafe_allow_html=True
+        )
+    with w_col3:
+        if st.button("▶", key="next_week_btn", help="Next Week"):
+            st.session_state.selected_date = ref_date + timedelta(days=7)
+            st.rerun()
+
+    # Filter Transactions for this Week
+    df_week = df_clean[(df_clean["Date_DT"] >= week_start) & (df_clean["Date_DT"] <= week_end)] if not df_clean.empty else pd.DataFrame()
+
+    w_income = df_week[df_week["Type"] == "Income"]["Amount"].sum() if not df_week.empty else 0.0
+    w_expense = df_week[df_week["Type"] == "Expense"]["Amount"].sum() if not df_week.empty else 0.0
+    w_net = w_income - w_expense
+
+    # Weekly Stat Badges
+    ws_1, ws_2, ws_3 = st.columns(3)
+    with ws_1:
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">INCOME</div><div style="font-size:15px; font-weight:700; color:#34D399;">+${w_income:,.2f}</div></div>""", unsafe_allow_html=True)
+    with ws_2:
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">EXPENSES</div><div style="font-size:15px; font-weight:700; color:#F87171;">-${w_expense:,.2f}</div></div>""", unsafe_allow_html=True)
+    with ws_3:
+        net_color = "#38BDF8" if w_net >= 0 else "#F87171"
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">NET CASH</div><div style="font-size:15px; font-weight:700; color:{net_color};">${w_net:,.2f}</div></div>""", unsafe_allow_html=True)
+
+    # Weekly Category Breakdown Chart
+    w_exp_df = df_week[df_week["Type"] == "Expense"] if not df_week.empty else pd.DataFrame()
+    if not w_exp_df.empty:
+        w_cat_summary = w_exp_df.groupby("Category")["Amount"].sum().reset_index()
+        fig_week_pie = px.pie(
+            w_cat_summary, values="Amount", names="Category", hole=0.5,
+            title=f"Week of {week_start.strftime('%b %d')} Spending",
+            color_discrete_sequence=px.colors.qualitative.Pastel
+        )
+        fig_week_pie.update_layout(
+            margin=dict(l=10, r=10, t=35, b=10), height=260, showlegend=True,
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#CBD5E1")
+        )
+        st.plotly_chart(fig_week_pie, use_container_width=True)
+    else:
+        st.caption("ℹ️ No expenses recorded for this specific week.")
 
     st.divider()
 
-    # 2. Dynamic Income vs Expense Comparison
-    if not df_tx.empty and "Type" in df_tx.columns:
-        # Group real transactions by Date/Week
-        df_tx_copy = df_tx.copy()
-        df_tx_copy["Date"] = pd.to_datetime(df_tx_copy["Date"], errors="coerce")
-        df_tx_valid = df_tx_copy.dropna(subset=["Date"])
-        
-        if not df_tx_valid.empty:
-            df_tx_valid["Week"] = df_tx_valid["Date"].dt.strftime("W%U (%b)")
-            flow_summary = df_tx_valid.groupby(["Week", "Type"])["Amount"].sum().unstack(fill_value=0).reset_index()
-            
-            inc_vals = flow_summary["Income"] if "Income" in flow_summary.columns else [0] * len(flow_summary)
-            exp_vals = flow_summary["Expense"] if "Expense" in flow_summary.columns else [0] * len(flow_summary)
-            
-            fig_bar = go.Figure(data=[
-                go.Bar(name="Income", x=flow_summary["Week"], y=inc_vals, marker_color="#3B82F6"),
-                go.Bar(name="Expenses", x=flow_summary["Week"], y=exp_vals, marker_color="#EF4444")
-            ])
-            fig_bar.update_layout(
-                barmode="group",
-                title="Weekly Cash Flow Pace ($)",
-                height=280,
-                margin=dict(l=10, r=10, t=40, b=10),
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#CBD5E1")
-            )
-            st.plotly_chart(fig_bar, use_container_width=True)
+    # ==========================================
+    # BLOCK 2: MONTHLY ANALYTICS (BOTTOM BLOCK)
+    # ==========================================
+    # Calculate Month Boundaries
+    m_year, m_month = ref_date.year, ref_date.month
+    month_start = date(m_year, m_month, 1)
+    last_day_num = calendar.monthrange(m_year, m_month)[1]
+    month_end = date(m_year, m_month, last_day_num)
+
+    st.markdown("### 📆 Monthly Analytics")
+    
+    # Arrow Navigation Controls for Month
+    m_col1, m_col2, m_col3 = st.columns([1, 4, 1])
+    with m_col1:
+        if st.button("◀", key="prev_month_btn", help="Previous Month"):
+            prev_m = m_month - 1 if m_month > 1 else 12
+            prev_y = m_year if m_month > 1 else m_year - 1
+            st.session_state.selected_date = date(prev_y, prev_m, 1)
+            st.rerun()
+    with m_col2:
+        st.markdown(
+            f"<div style='text-align:center; font-weight:700; font-size:16px; color:#38BDF8; padding-top:8px;'>"
+            f"{month_start.strftime('%B %Y')}</div>",
+            unsafe_allow_html=True
+        )
+    with m_col3:
+        if st.button("▶", key="next_month_btn", help="Next Month"):
+            next_m = m_month + 1 if m_month < 12 else 1
+            next_y = m_year if m_month < 12 else m_year + 1
+            st.session_state.selected_date = date(next_y, next_m, 1)
+            st.rerun()
+
+    # Filter Transactions for this Month
+    df_month = df_clean[(df_clean["Date_DT"] >= month_start) & (df_clean["Date_DT"] <= month_end)] if not df_clean.empty else pd.DataFrame()
+
+    m_income = df_month[df_month["Type"] == "Income"]["Amount"].sum() if not df_month.empty else 0.0
+    m_expense = df_month[df_month["Type"] == "Expense"]["Amount"].sum() if not df_month.empty else 0.0
+    m_net = m_income - m_expense
+
+    ms_1, ms_2, ms_3 = st.columns(3)
+    with ms_1:
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">MONTH INCOME</div><div style="font-size:15px; font-weight:700; color:#34D399;">+${m_income:,.2f}</div></div>""", unsafe_allow_html=True)
+    with ms_2:
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">MONTH EXPENSES</div><div style="font-size:15px; font-weight:700; color:#F87171;">-${m_expense:,.2f}</div></div>""", unsafe_allow_html=True)
+    with ms_3:
+        m_net_color = "#38BDF8" if m_net >= 0 else "#F87171"
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">MONTH NET</div><div style="font-size:15px; font-weight:700; color:{m_net_color};">${m_net:,.2f}</div></div>""", unsafe_allow_html=True)
+
+    # Monthly Donut Chart
+    m_exp_df = df_month[df_month["Type"] == "Expense"] if not df_month.empty else pd.DataFrame()
+    if not m_exp_df.empty:
+        m_cat_summary = m_exp_df.groupby("Category")["Amount"].sum().reset_index()
+        fig_month_pie = px.pie(
+            m_cat_summary, values="Amount", names="Category", hole=0.55,
+            title=f"{month_start.strftime('%B %Y')} Full Breakdown",
+            color_discrete_sequence=px.colors.qualitative.Prism
+        )
+        fig_month_pie.update_layout(
+            margin=dict(l=10, r=10, t=35, b=10), height=280, showlegend=True,
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#CBD5E1")
+        )
+        st.plotly_chart(fig_month_pie, use_container_width=True)
     else:
-        st.caption("💡 Cash flow trends will build automatically as weekly income and expenses are logged.")
+        st.caption(f"ℹ️ No expenses recorded yet for {month_start.strftime('%B %Y')}.")
+
+    # --- CLICKABLE WEEKS WITHIN THIS MONTH ---
+    st.markdown("#### 🔍 Jump to a Week in this Month:")
+    # Build list of weeks for this month
+    curr_w_start = month_start - timedelta(days=month_start.weekday())
+    week_buttons = []
+    while curr_w_start <= month_end:
+        curr_w_end = curr_w_start + timedelta(days=6)
+        week_buttons.append((curr_w_start, curr_w_end))
+        curr_w_start += timedelta(days=7)
+
+    # Display 2 buttons per row
+    for i in range(0, len(week_buttons), 2):
+        b_cols = st.columns(2)
+        for j, (w_s, w_e) in enumerate(week_buttons[i:i+2]):
+            with b_cols[j]:
+                label = f"{w_s.strftime('%b %d')} – {w_e.strftime('%b %d')}"
+                if st.button(f"🔎 {label}", key=f"btn_w_{w_s.strftime('%Y%m%d')}"):
+                    st.session_state.selected_date = w_s
+                    st.rerun()
 
 # ------------------------------------------
 # TAB 3: ACCOUNTS & CREDIT HUB
