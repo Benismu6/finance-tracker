@@ -5,6 +5,8 @@ import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 import calendar
 from streamlit_gsheets import GSheetsConnection
+import gspread
+from google.oauth2.service_account import Credentials
 import google.generativeai as genai
 
 # ==========================================
@@ -143,22 +145,24 @@ def get_next_recurring_date(target_day: int, ref_date: date) -> date:
     return cand
 
 # ==========================================
-# 3. DATA CONNECTION & GSHEET WRITER
+# 3. DIRECT GSHEETS CONNECTION & WRITER
 # ==========================================
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def append_tx_to_sheet(row_values):
     """
-    Directly accesses the underlying authenticated gspread client
-    to append a row safely without permission or overwrite conflicts.
+    Directly authenticates via gspread with Service Account credentials
+    from st.secrets to append a row safely and reliably.
     """
-    try:
-        raw_client = conn._instance.client
-    except Exception:
-        raw_client = conn._instance
-        
-    sheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-    spreadsheet = raw_client.open_by_url(sheet_url)
+    creds_dict = dict(st.secrets["connections"]["gsheets"])
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+    gc = gspread.authorize(credentials)
+    sheet_url = creds_dict["spreadsheet"]
+    spreadsheet = gc.open_by_url(sheet_url)
     worksheet = spreadsheet.worksheet("Master_Transactions")
     worksheet.append_row(row_values, value_input_option="USER_ENTERED")
 
@@ -666,7 +670,7 @@ with tabs[2]:
 with tabs[3]:
     st.subheader("🏠 Baltimore Home Purchase Target")
     st.progress(goal_progress)
-    st.caption(f"**${total_cash:,.2f}** saved of **${HOME_GOAL:,.2f}** goal ({(goal_progress*100):.1f}%)")
+    st.caption(f"**${total_cash:,.2f}** saved of **${HOME_GOAL:,.2f}** goal ({(goal_progress*100):.1f}%)\")
     
     col_a, col_b = st.columns(2)
     with col_a:
@@ -693,7 +697,7 @@ with tabs[3]:
       * *2.5% Buyer Agent Commission Credit:* -$7,500
       * *Maryland Mortgage Program (MMP) DPA:* -$9,000
       * *Seller Concessions (1.5%):* -$4,500
-    * **Net Cash at Closing:** $20,000
+    * **Net Cash at Settlement:** $20,000
     * **Post-Closing 3-Mo Reserves:** $6,500
     * **Total Liquid Target:** **$26,500**
     """)
