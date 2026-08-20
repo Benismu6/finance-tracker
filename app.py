@@ -22,6 +22,7 @@ st.markdown("""
     header[data-testid="stHeader"], .stAppHeader, header { display: none !important; visibility: hidden !important; height: 0px !important; }
     div[data-testid="stDecoration"], #MainMenu, footer { display: none !important; visibility: hidden !important; }
 
+    /* Centered on Desktop at max 750px, Full-Width on Mobile */
     .block-container {
         padding-top: 1.2rem !important;
         padding-bottom: 2rem !important;
@@ -142,9 +143,24 @@ def get_next_recurring_date(target_day: int, ref_date: date) -> date:
     return cand
 
 # ==========================================
-# 3. DATA CONNECTION & ACCOUNTS REGISTRY
+# 3. DATA CONNECTION & GSHEET WRITER
 # ==========================================
 conn = st.connection("gsheets", type=GSheetsConnection)
+
+def append_tx_to_sheet(row_values):
+    """
+    Directly accesses the underlying authenticated gspread client
+    to append a row safely without permission or overwrite conflicts.
+    """
+    try:
+        raw_client = conn._instance.client
+    except Exception:
+        raw_client = conn._instance
+        
+    sheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
+    spreadsheet = raw_client.open_by_url(sheet_url)
+    worksheet = spreadsheet.worksheet("Master_Transactions")
+    worksheet.append_row(row_values, value_input_option="USER_ENTERED")
 
 def get_ledger_data():
     try:
@@ -166,7 +182,7 @@ cash_registry = [
     {"name": "SECU 4987", "role": "Dedicated Home Savings / HYSA", "base": 4212.10}
 ]
 
-# Personal CCs with recurring calendar days
+# Personal CC definitions with recurring schedule days
 personal_cc_definitions = [
     {"name": "Chase 1993", "base": 517.70, "limit": 10600.00, "due_day": 1, "close_day": 4, "is_primary": True, "target": "$0.00"},
     {"name": "Chase 2207", "base": 9.52, "limit": 4900.00, "due_day": 1, "close_day": 4, "is_azeo_active": True, "target": "~$10.00 (1%)"},
@@ -188,7 +204,6 @@ for card in personal_cc_definitions:
     paid = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "CC Payment")]["Amount"].sum()
     current_bal = max(card["base"] + spent - paid, 0.0)
     
-    # Calculate next rolling due and close dates
     next_due = get_next_recurring_date(card["due_day"], today_dt)
     next_close = get_next_recurring_date(card["close_day"], today_dt)
     pay_by_date = next_due - timedelta(days=1)
@@ -307,39 +322,27 @@ with tabs[0]:
             goal_tag = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"], key="f_exp_gt")
             
             if st.form_submit_button("Record Expense"):
-                            clean_acc = selected_acc.split(" (")[0]
-                            tx_id = f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-                            date_str = entry_date.strftime("%Y-%m-%d")
-                            
-                            # Format the row to match your Master_Transactions headers:
-                            # [Transaction_ID, Date, Account, Type, Category, Merchant, Amount, Goal_Tag, Notes]
-                            new_row_values = [
-                                tx_id,
-                                date_str,
-                                clean_acc,
-                                "Expense",
-                                selected_cat,
-                                vendor,
-                                float(amt),
-                                goal_tag,
-                                "Mobile App Entry"
-                            ]
-                            
-                            try:
-                                # Direct, fast append to the Master_Transactions tab
-                                # Using the underlying authenticated client
-                                client = conn._instance
-                                # Open sheet and target worksheet
-                                sheet = client.open_by_url(st.secrets["connections"]["gsheets"]["spreadsheet"])
-                                worksheet = sheet.worksheet("Master_Transactions")
-                                
-                                # Append the row
-                                worksheet.append_row(new_row_values, value_input_option="USER_ENTERED")
-                                
-                                st.success(f"✅ Successfully written to Google Sheets: ${amt:.2f} to {selected_cat} on {clean_acc}!")
-                                st.rerun()
-                            except Exception as err:
-                                st.error(f"❌ Write Error: {err}")
+                clean_acc = selected_acc.split(" (")[0]
+                tx_id = f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                date_str = entry_date.strftime("%Y-%m-%d")
+                
+                new_row_values = [
+                    tx_id,
+                    date_str,
+                    clean_acc,
+                    "Expense",
+                    selected_cat,
+                    vendor,
+                    float(amt),
+                    goal_tag,
+                    "Mobile App Entry"
+                ]
+                try:
+                    append_tx_to_sheet(new_row_values)
+                    st.success(f"✅ Successfully written to Google Sheets: ${amt:.2f} to {selected_cat} on {clean_acc}!")
+                    st.rerun()
+                except Exception as err:
+                    st.error(f"❌ Write Error: {err}")
 
     with tab_inc:
         with st.form("log_income_form", clear_on_submit=True):
@@ -350,31 +353,28 @@ with tabs[0]:
             inc_date = st.date_input("Date", value=datetime.today(), key="f_inc_date")
             
             if st.form_submit_button("Record Income"):
-                            clean_inc_acc = inc_acc.split(" (")[0]
-                            tx_id = f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-                            date_str = inc_date.strftime("%Y-%m-%d")
-                            goal = "Baltimore 1st Home" if "SECU" in clean_inc_acc else "General Living"
-                            
-                            new_row_values = [
-                                tx_id,
-                                date_str,
-                                clean_inc_acc,
-                                "Income",
-                                inc_cat,
-                                inc_desc,
-                                float(inc_amt),
-                                goal,
-                                "Mobile App Entry"
-                            ]
-                            try:
-                                client = conn._instance
-                                sheet = client.open_by_url(st.secrets["connections"]["gsheets"]["spreadsheet"])
-                                worksheet = sheet.worksheet("Master_Transactions")
-                                worksheet.append_row(new_row_values, value_input_option="USER_ENTERED")
-                                st.success(f"✅ Logged ${inc_amt:.2f} {inc_cat} into {clean_inc_acc}!")
-                                st.rerun()
-                            except Exception as err:
-                                st.error(f"❌ Write Error: {err}")
+                clean_inc_acc = inc_acc.split(" (")[0]
+                tx_id = f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                date_str = inc_date.strftime("%Y-%m-%d")
+                goal = "Baltimore 1st Home" if "SECU" in clean_inc_acc else "General Living"
+                
+                new_row_values = [
+                    tx_id,
+                    date_str,
+                    clean_inc_acc,
+                    "Income",
+                    inc_cat,
+                    inc_desc,
+                    float(inc_amt),
+                    goal,
+                    "Mobile App Entry"
+                ]
+                try:
+                    append_tx_to_sheet(new_row_values)
+                    st.success(f"✅ Logged ${inc_amt:.2f} {inc_cat} into {clean_inc_acc}!")
+                    st.rerun()
+                except Exception as err:
+                    st.error(f"❌ Write Error: {err}")
 
     with tab_pay:
         with st.form("log_payment_form", clear_on_submit=True):
@@ -385,30 +385,27 @@ with tabs[0]:
             pay_date = st.date_input("Date", value=datetime.today(), key="f_pay_date")
             
             if st.form_submit_button("Record CC Payment"):
-                            clean_from = from_account.split(" (")[0]
-                            tx_id = f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-                            date_str = pay_date.strftime("%Y-%m-%d")
-                            
-                            new_row_values = [
-                                tx_id,
-                                date_str,
-                                target_card,
-                                "CC Payment",
-                                "CC Payment",
-                                f"Paid from {clean_from}",
-                                float(pay_amt),
-                                "General Living",
-                                "Mobile App Entry"
-                            ]
-                            try:
-                                client = conn._instance
-                                sheet = client.open_by_url(st.secrets["connections"]["gsheets"]["spreadsheet"])
-                                worksheet = sheet.worksheet("Master_Transactions")
-                                worksheet.append_row(new_row_values, value_input_option="USER_ENTERED")
-                                st.success(f"✅ Recorded ${pay_amt:.2f} payment to {target_card}!")
-                                st.rerun()
-                            except Exception as err:
-                                st.error(f"❌ Write Error: {err}")
+                clean_from = from_account.split(" (")[0]
+                tx_id = f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                date_str = pay_date.strftime("%Y-%m-%d")
+                
+                new_row_values = [
+                    tx_id,
+                    date_str,
+                    target_card,
+                    "CC Payment",
+                    "CC Payment",
+                    f"Paid from {clean_from}",
+                    float(pay_amt),
+                    "General Living",
+                    "Mobile App Entry"
+                ]
+                try:
+                    append_tx_to_sheet(new_row_values)
+                    st.success(f"✅ Recorded ${pay_amt:.2f} payment to {target_card}!")
+                    st.rerun()
+                except Exception as err:
+                    st.error(f"❌ Write Error: {err}")
 
 # ------------------------------------------
 # TAB 2: ANALYTICS & CHARTS (STACKED BLOCKS)
@@ -416,11 +413,10 @@ with tabs[0]:
 with tabs[1]:
     st.subheader("📊 Financial Analytics & Trends")
 
-    # Initialize navigation session states
     if "selected_date" not in st.session_state:
         st.session_state.selected_date = date.today()
 
-    # --- GLOBAL JUMP-TO-DATE CALENDAR ---
+    # Global Calendar Jump
     with st.expander("📅 Jump to Specific Date / Past Year", expanded=False):
         picked_date = st.date_input(
             "Select any date to view historical analytics:",
@@ -433,7 +429,7 @@ with tabs[1]:
 
     ref_date = st.session_state.selected_date
 
-    # Prepare DataFrame with clean datetime objects
+    # Prepare DataFrame
     df_clean = df_tx.copy() if (df_tx is not None and not df_tx.empty) else pd.DataFrame(columns=["Date", "Type", "Category", "Amount"])
     if not df_clean.empty and "Date" in df_clean.columns:
         df_clean["Date_DT"] = pd.to_datetime(df_clean["Date"], errors="coerce").dt.date
@@ -444,13 +440,11 @@ with tabs[1]:
     # ==========================================
     # BLOCK 1: WEEKLY ANALYTICS (TOP BLOCK)
     # ==========================================
-    # Calculate Monday-to-Sunday boundaries for ref_date
     week_start = ref_date - timedelta(days=ref_date.weekday())
     week_end = week_start + timedelta(days=6)
 
     st.markdown("### 🗓️ Weekly Analytics")
     
-    # Arrow Navigation Controls for Week
     w_col1, w_col2, w_col3 = st.columns([1, 4, 1])
     with w_col1:
         if st.button("◀", key="prev_week_btn", help="Previous Week"):
@@ -467,14 +461,12 @@ with tabs[1]:
             st.session_state.selected_date = ref_date + timedelta(days=7)
             st.rerun()
 
-    # Filter Transactions for this Week
     df_week = df_clean[(df_clean["Date_DT"] >= week_start) & (df_clean["Date_DT"] <= week_end)] if not df_clean.empty else pd.DataFrame()
 
     w_income = df_week[df_week["Type"] == "Income"]["Amount"].sum() if not df_week.empty else 0.0
     w_expense = df_week[df_week["Type"] == "Expense"]["Amount"].sum() if not df_week.empty else 0.0
     w_net = w_income - w_expense
 
-    # Weekly Stat Badges
     ws_1, ws_2, ws_3 = st.columns(3)
     with ws_1:
         st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">INCOME</div><div style="font-size:15px; font-weight:700; color:#34D399;">+${w_income:,.2f}</div></div>""", unsafe_allow_html=True)
@@ -484,7 +476,6 @@ with tabs[1]:
         net_color = "#38BDF8" if w_net >= 0 else "#F87171"
         st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">NET CASH</div><div style="font-size:15px; font-weight:700; color:{net_color};">${w_net:,.2f}</div></div>""", unsafe_allow_html=True)
 
-    # Weekly Category Breakdown Chart
     w_exp_df = df_week[df_week["Type"] == "Expense"] if not df_week.empty else pd.DataFrame()
     if not w_exp_df.empty:
         w_cat_summary = w_exp_df.groupby("Category")["Amount"].sum().reset_index()
@@ -506,7 +497,6 @@ with tabs[1]:
     # ==========================================
     # BLOCK 2: MONTHLY ANALYTICS (BOTTOM BLOCK)
     # ==========================================
-    # Calculate Month Boundaries
     m_year, m_month = ref_date.year, ref_date.month
     month_start = date(m_year, m_month, 1)
     last_day_num = calendar.monthrange(m_year, m_month)[1]
@@ -514,7 +504,6 @@ with tabs[1]:
 
     st.markdown("### 📆 Monthly Analytics")
     
-    # Arrow Navigation Controls for Month
     m_col1, m_col2, m_col3 = st.columns([1, 4, 1])
     with m_col1:
         if st.button("◀", key="prev_month_btn", help="Previous Month"):
@@ -535,7 +524,6 @@ with tabs[1]:
             st.session_state.selected_date = date(next_y, next_m, 1)
             st.rerun()
 
-    # Filter Transactions for this Month
     df_month = df_clean[(df_clean["Date_DT"] >= month_start) & (df_clean["Date_DT"] <= month_end)] if not df_clean.empty else pd.DataFrame()
 
     m_income = df_month[df_month["Type"] == "Income"]["Amount"].sum() if not df_month.empty else 0.0
@@ -551,7 +539,6 @@ with tabs[1]:
         m_net_color = "#38BDF8" if m_net >= 0 else "#F87171"
         st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">MONTH NET</div><div style="font-size:15px; font-weight:700; color:{m_net_color};">${m_net:,.2f}</div></div>""", unsafe_allow_html=True)
 
-    # Monthly Donut Chart
     m_exp_df = df_month[df_month["Type"] == "Expense"] if not df_month.empty else pd.DataFrame()
     if not m_exp_df.empty:
         m_cat_summary = m_exp_df.groupby("Category")["Amount"].sum().reset_index()
@@ -568,9 +555,8 @@ with tabs[1]:
     else:
         st.caption(f"ℹ️ No expenses recorded yet for {month_start.strftime('%B %Y')}.")
 
-    # --- CLICKABLE WEEKS WITHIN THIS MONTH ---
+    # Clickable weeks inside this month
     st.markdown("#### 🔍 Jump to a Week in this Month:")
-    # Build list of weeks for this month
     curr_w_start = month_start - timedelta(days=month_start.weekday())
     week_buttons = []
     while curr_w_start <= month_end:
@@ -578,7 +564,6 @@ with tabs[1]:
         week_buttons.append((curr_w_start, curr_w_end))
         curr_w_start += timedelta(days=7)
 
-    # Display 2 buttons per row
     for i in range(0, len(week_buttons), 2):
         b_cols = st.columns(2)
         for j, (w_s, w_e) in enumerate(week_buttons[i:i+2]):
