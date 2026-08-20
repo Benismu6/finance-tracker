@@ -308,27 +308,38 @@ with tabs[0]:
             
             if st.form_submit_button("Record Expense"):
                             clean_acc = selected_acc.split(" (")[0]
-                            new_entry = pd.DataFrame([{
-                                "Transaction_ID": f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-                                "Date": entry_date.strftime("%Y-%m-%d"),
-                                "Account": clean_acc,
-                                "Type": "Expense",
-                                "Category": selected_cat,
-                                "Merchant": vendor,
-                                "Amount": amt,
-                                "Goal_Tag": goal_tag,
-                                "Notes": "Mobile App Entry"
-                            }])
+                            tx_id = f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                            date_str = entry_date.strftime("%Y-%m-%d")
+                            
+                            # Format the row to match your Master_Transactions headers:
+                            # [Transaction_ID, Date, Account, Type, Category, Merchant, Amount, Goal_Tag, Notes]
+                            new_row_values = [
+                                tx_id,
+                                date_str,
+                                clean_acc,
+                                "Expense",
+                                selected_cat,
+                                vendor,
+                                float(amt),
+                                goal_tag,
+                                "Mobile App Entry"
+                            ]
+                            
                             try:
-                                # Clean data and append to Master_Transactions tab
-                                current_df = df_tx.dropna(how="all") if df_tx is not None else pd.DataFrame()
-                                updated_ledger = pd.concat([current_df, new_entry], ignore_index=True)
+                                # Direct, fast append to the Master_Transactions tab
+                                # Using the underlying authenticated client
+                                client = conn._instance
+                                # Open sheet and target worksheet
+                                sheet = client.open_by_url(st.secrets["connections"]["gsheets"]["spreadsheet"])
+                                worksheet = sheet.worksheet("Master_Transactions")
                                 
-                                conn.update(worksheet="Master_Transactions", data=updated_ledger)
+                                # Append the row
+                                worksheet.append_row(new_row_values, value_input_option="USER_ENTERED")
+                                
                                 st.success(f"✅ Successfully written to Google Sheets: ${amt:.2f} to {selected_cat} on {clean_acc}!")
                                 st.rerun()
-                            except Exception as e:
-                                st.error(f"❌ Write failed. Google Sheets API error: {e}")
+                            except Exception as err:
+                                st.error(f"❌ Write Error: {err}")
 
     with tab_inc:
         with st.form("log_income_form", clear_on_submit=True):
@@ -339,24 +350,31 @@ with tabs[0]:
             inc_date = st.date_input("Date", value=datetime.today(), key="f_inc_date")
             
             if st.form_submit_button("Record Income"):
-                clean_inc_acc = inc_acc.split(" (")[0]
-                new_entry = pd.DataFrame([{
-                    "Transaction_ID": f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-                    "Date": inc_date.strftime("%Y-%m-%d"),
-                    "Account": clean_inc_acc,
-                    "Type": "Income",
-                    "Category": inc_cat,
-                    "Merchant": inc_desc,
-                    "Amount": inc_amt,
-                    "Goal_Tag": "Baltimore 1st Home" if "SECU" in clean_inc_acc else "General Living",
-                    "Notes": "Mobile App Entry"
-                }])
-                try:
-                    updated_ledger = pd.concat([df_tx, new_entry], ignore_index=True)
-                    conn.update(worksheet="Master_Transactions", data=updated_ledger)
-                    st.success(f"✅ Logged ${inc_amt:.2f} {inc_cat} into {clean_inc_acc}!")
-                except Exception:
-                    st.info(f"Recorded: ${inc_amt:.2f} into {clean_inc_acc}")
+                            clean_inc_acc = inc_acc.split(" (")[0]
+                            tx_id = f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                            date_str = inc_date.strftime("%Y-%m-%d")
+                            goal = "Baltimore 1st Home" if "SECU" in clean_inc_acc else "General Living"
+                            
+                            new_row_values = [
+                                tx_id,
+                                date_str,
+                                clean_inc_acc,
+                                "Income",
+                                inc_cat,
+                                inc_desc,
+                                float(inc_amt),
+                                goal,
+                                "Mobile App Entry"
+                            ]
+                            try:
+                                client = conn._instance
+                                sheet = client.open_by_url(st.secrets["connections"]["gsheets"]["spreadsheet"])
+                                worksheet = sheet.worksheet("Master_Transactions")
+                                worksheet.append_row(new_row_values, value_input_option="USER_ENTERED")
+                                st.success(f"✅ Logged ${inc_amt:.2f} {inc_cat} into {clean_inc_acc}!")
+                                st.rerun()
+                            except Exception as err:
+                                st.error(f"❌ Write Error: {err}")
 
     with tab_pay:
         with st.form("log_payment_form", clear_on_submit=True):
@@ -367,24 +385,30 @@ with tabs[0]:
             pay_date = st.date_input("Date", value=datetime.today(), key="f_pay_date")
             
             if st.form_submit_button("Record CC Payment"):
-                clean_from = from_account.split(" (")[0]
-                new_entry = pd.DataFrame([{
-                    "Transaction_ID": f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-                    "Date": pay_date.strftime("%Y-%m-%d"),
-                    "Account": target_card,
-                    "Type": "CC Payment",
-                    "Category": "CC Payment",
-                    "Merchant": f"Paid from {clean_from}",
-                    "Amount": pay_amt,
-                    "Goal_Tag": "General Living",
-                    "Notes": "Mobile App Entry"
-                }])
-                try:
-                    updated_ledger = pd.concat([df_tx, new_entry], ignore_index=True)
-                    conn.update(worksheet="Master_Transactions", data=updated_ledger)
-                    st.success(f"✅ Recorded ${pay_amt:.2f} payment to {target_card}!")
-                except Exception:
-                    st.info(f"Payment recorded: ${pay_amt:.2f} to {target_card}")
+                            clean_from = from_account.split(" (")[0]
+                            tx_id = f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                            date_str = pay_date.strftime("%Y-%m-%d")
+                            
+                            new_row_values = [
+                                tx_id,
+                                date_str,
+                                target_card,
+                                "CC Payment",
+                                "CC Payment",
+                                f"Paid from {clean_from}",
+                                float(pay_amt),
+                                "General Living",
+                                "Mobile App Entry"
+                            ]
+                            try:
+                                client = conn._instance
+                                sheet = client.open_by_url(st.secrets["connections"]["gsheets"]["spreadsheet"])
+                                worksheet = sheet.worksheet("Master_Transactions")
+                                worksheet.append_row(new_row_values, value_input_option="USER_ENTERED")
+                                st.success(f"✅ Recorded ${pay_amt:.2f} payment to {target_card}!")
+                                st.rerun()
+                            except Exception as err:
+                                st.error(f"❌ Write Error: {err}")
 
 # ------------------------------------------
 # TAB 2: ANALYTICS & CHARTS (STACKED BLOCKS)
