@@ -307,24 +307,28 @@ with tabs[0]:
             goal_tag = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"], key="f_exp_gt")
             
             if st.form_submit_button("Record Expense"):
-                clean_acc = selected_acc.split(" (")[0]
-                new_entry = pd.DataFrame([{
-                    "Transaction_ID": f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-                    "Date": entry_date.strftime("%Y-%m-%d"),
-                    "Account": clean_acc,
-                    "Type": "Expense",
-                    "Category": selected_cat,
-                    "Merchant": vendor,
-                    "Amount": amt,
-                    "Goal_Tag": goal_tag,
-                    "Notes": "Mobile App Entry"
-                }])
-                try:
-                    updated_ledger = pd.concat([df_tx, new_entry], ignore_index=True)
-                    conn.update(worksheet="Master_Transactions", data=updated_ledger)
-                    st.success(f"✅ Logged ${amt:.2f} to {selected_cat} on {clean_acc}!")
-                except Exception:
-                    st.info(f"Recorded: ${amt:.2f} on {clean_acc}")
+                            clean_acc = selected_acc.split(" (")[0]
+                            new_entry = pd.DataFrame([{
+                                "Transaction_ID": f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                                "Date": entry_date.strftime("%Y-%m-%d"),
+                                "Account": clean_acc,
+                                "Type": "Expense",
+                                "Category": selected_cat,
+                                "Merchant": vendor,
+                                "Amount": amt,
+                                "Goal_Tag": goal_tag,
+                                "Notes": "Mobile App Entry"
+                            }])
+                            try:
+                                # Clean data and append to Master_Transactions tab
+                                current_df = df_tx.dropna(how="all") if df_tx is not None else pd.DataFrame()
+                                updated_ledger = pd.concat([current_df, new_entry], ignore_index=True)
+                                
+                                conn.update(worksheet="Master_Transactions", data=updated_ledger)
+                                st.success(f"✅ Successfully written to Google Sheets: ${amt:.2f} to {selected_cat} on {clean_acc}!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Write failed. Google Sheets API error: {e}")
 
     with tab_inc:
         with st.form("log_income_form", clear_on_submit=True):
