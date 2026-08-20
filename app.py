@@ -4,6 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 import calendar
+import traceback
 from streamlit_gsheets import GSheetsConnection
 import gspread
 from google.oauth2.service_account import Credentials
@@ -151,17 +152,30 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 def append_tx_to_sheet(row_values):
     """
-    Directly authenticates via gspread with Service Account credentials
+    Directly authenticates via gspread with filtered Service Account credentials
     from st.secrets to append a row safely and reliably.
     """
-    creds_dict = dict(st.secrets["connections"]["gsheets"])
+    gs_secrets = dict(st.secrets["connections"]["gsheets"])
+    
+    sa_keys = [
+        "type", "project_id", "private_key_id", "private_key",
+        "client_email", "client_id", "auth_uri", "token_uri",
+        "auth_provider_x509_cert_url", "client_x509_cert_url"
+    ]
+    service_account_info = {k: gs_secrets[k] for k in sa_keys if k in gs_secrets}
+    
+    if "private_key" in service_account_info:
+        service_account_info["private_key"] = service_account_info["private_key"].replace("\\n", "\n")
+
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
     ]
-    credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+    
+    credentials = Credentials.from_service_account_info(service_account_info, scopes=scopes)
     gc = gspread.authorize(credentials)
-    sheet_url = creds_dict["spreadsheet"]
+    
+    sheet_url = gs_secrets["spreadsheet"]
     spreadsheet = gc.open_by_url(sheet_url)
     worksheet = spreadsheet.worksheet("Master_Transactions")
     worksheet.append_row(row_values, value_input_option="USER_ENTERED")
@@ -346,7 +360,7 @@ with tabs[0]:
                     st.success(f"✅ Successfully written to Google Sheets: ${amt:.2f} to {selected_cat} on {clean_acc}!")
                     st.rerun()
                 except Exception as err:
-                    st.error(f"❌ Write Error: {err}")
+                    st.error(f"❌ Write Error: {str(err)}\n{traceback.format_exc()}")
 
     with tab_inc:
         with st.form("log_income_form", clear_on_submit=True):
@@ -378,7 +392,7 @@ with tabs[0]:
                     st.success(f"✅ Logged ${inc_amt:.2f} {inc_cat} into {clean_inc_acc}!")
                     st.rerun()
                 except Exception as err:
-                    st.error(f"❌ Write Error: {err}")
+                    st.error(f"❌ Write Error: {str(err)}\n{traceback.format_exc()}")
 
     with tab_pay:
         with st.form("log_payment_form", clear_on_submit=True):
@@ -409,7 +423,7 @@ with tabs[0]:
                     st.success(f"✅ Recorded ${pay_amt:.2f} payment to {target_card}!")
                     st.rerun()
                 except Exception as err:
-                    st.error(f"❌ Write Error: {err}")
+                    st.error(f"❌ Write Error: {str(err)}\n{traceback.format_exc()}")
 
 # ------------------------------------------
 # TAB 2: ANALYTICS & CHARTS (STACKED BLOCKS)
