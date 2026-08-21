@@ -205,11 +205,8 @@ cash_registry_def = [
 live_cash_registry = []
 for acc in cash_registry_def:
     a_name = acc["name"]
-    # Income deposited into this account
     inc_val = df_tx[(df_tx["Account"] == a_name) & (df_tx["Type"] == "Income")]["Amount"].sum()
-    # Expenses paid directly from this cash account
     exp_val = df_tx[(df_tx["Account"] == a_name) & (df_tx["Type"] == "Expense")]["Amount"].sum()
-    # CC Payments sent FROM this account (stored in Merchant as "Paid from <Account>")
     cc_paid_out = df_tx[(df_tx["Type"] == "CC Payment") & (df_tx["Merchant"].str.contains(a_name, na=False))]["Amount"].sum()
     
     current_cash = acc["base"] + inc_val - exp_val - cc_paid_out
@@ -286,11 +283,19 @@ goal_progress = min(total_cash / HOME_GOAL, 1.0)
 remaining_goal = max(HOME_GOAL - total_cash, 0.0)
 
 # ==========================================
-# 4. AI EXECUTIVE SUMMARY
+# 4. AI EXECUTIVE SUMMARY & KEY FETCHER
 # ==========================================
+def get_gemini_api_key():
+    """Finds GEMINI_API_KEY regardless of root or nested secrets placement."""
+    if "GEMINI_API_KEY" in st.secrets:
+        return st.secrets["GEMINI_API_KEY"]
+    if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
+        return st.secrets["connections"]["gsheets"].get("GEMINI_API_KEY", None)
+    return None
+
 def generate_ai_insights():
     try:
-        api_key = st.secrets.get("GEMINI_API_KEY")
+        api_key = get_gemini_api_key()
         if api_key:
             genai.configure(api_key=api_key)
             model = genai.GenerativeModel("gemini-1.5-flash")
@@ -419,12 +424,10 @@ with tabs[0]:
 
     with tab_pay:
         with st.form("log_payment_form", clear_on_submit=True):
-            # 1. Build a quick lookup map of card name -> current live balance
             all_live_cards = live_personal_cc + live_biz_cc
             card_balance_map = {c["name"]: c["current_balance"] for c in all_live_cards}
             all_cc_names = list(card_balance_map.keys())
 
-            # 2. Dropdown showing live balances formatted next to each card
             target_card = st.selectbox(
                 "Credit Card Paid",
                 all_cc_names,
@@ -641,22 +644,22 @@ with tabs[2]:
     st.caption("How your liquid cash is distributed across checking and savings.")
     
     for acc in live_cash_registry:
-            bal = acc["current_balance"]
-            pct_of_total = (bal / total_cash) * 100 if total_cash > 0 else 0.0
-            st.markdown(f"""
-            <div style="background:#1E293B; border-radius:10px; padding:12px 14px; margin-bottom:8px; border:1px solid #334155;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <div>
-                        <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{acc['name']}</span>
-                        <div style="font-size:12px; color:#94A3B8;">{acc['role']}</div>
-                    </div>
-                    <div style="text-align:right;">
-                        <span style="font-weight:700; font-size:16px; color:#38BDF8;">${bal:,.2f}</span>
-                        <div style="font-size:11px; color:#64748B;">{pct_of_total:.1f}% of cash</div>
-                    </div>
+        bal = acc["current_balance"]
+        pct_of_total = (bal / total_cash) * 100 if total_cash > 0 else 0.0
+        st.markdown(f"""
+        <div style="background:#1E293B; border-radius:10px; padding:12px 14px; margin-bottom:8px; border:1px solid #334155;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{acc['name']}</span>
+                    <div style="font-size:12px; color:#94A3B8;">{acc['role']}</div>
+                </div>
+                <div style="text-align:right;">
+                    <span style="font-weight:700; font-size:16px; color:#38BDF8;">${bal:,.2f}</span>
+                    <div style="font-size:11px; color:#64748B;">{pct_of_total:.1f}% of cash</div>
                 </div>
             </div>
-            """, unsafe_allow_html=True)
+        </div>
+        """, unsafe_allow_html=True)
 
     st.divider()
 
@@ -803,7 +806,7 @@ with tabs[4]:
 
         with st.chat_message("assistant"):
             try:
-                api_key = st.secrets.get("GEMINI_API_KEY")
+                api_key = get_gemini_api_key()
                 if api_key:
                     genai.configure(api_key=api_key)
                     model = genai.GenerativeModel(
