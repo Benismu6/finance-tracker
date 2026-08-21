@@ -298,7 +298,7 @@ def generate_ai_insights():
         api_key = get_gemini_api_key()
         if api_key:
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel("gemini-2.5-flash")
+            model = genai.GenerativeModel("gemini-3.6-flash")
             prompt = f"""
             Act as an elite financial advisor. Provide a concise 2-sentence update:
             - Net Liquid Cash: ${net_liquid_cash:,.2f} (Total Cash: ${total_cash:,.2f}, Personal CCs: ${personal_cc_debt:,.2f}, Biz CC: ${biz_cc_debt:,.2f}).
@@ -805,7 +805,7 @@ with tabs[4]:
                 if api_key:
                     genai.configure(api_key=api_key)
                     model = genai.GenerativeModel(
-                        "gemini-2.5-flash",
+                        "gemini-3.6-flash",
                         system_instruction=system_context
                     )
                     
