@@ -419,10 +419,27 @@ with tabs[0]:
 
     with tab_pay:
         with st.form("log_payment_form", clear_on_submit=True):
-            pay_amt = st.number_input("Payment Amount ($)", min_value=0.01, step=1.00, format="%.2f", key="f_pay_amt")
+            # 1. Build a quick lookup map of card name -> current live balance
+            all_live_cards = live_personal_cc + live_biz_cc
+            card_balance_map = {c["name"]: c["current_balance"] for c in all_live_cards}
+            all_cc_names = list(card_balance_map.keys())
+
+            # 2. Dropdown showing live balances formatted next to each card
+            target_card = st.selectbox(
+                "Credit Card Paid",
+                all_cc_names,
+                format_func=lambda x: f"{x}  —  ${card_balance_map.get(x, 0.0):,.2f} balance",
+                key="f_pay_to"
+            )
+
+            pay_amt = st.number_input(
+                "Payment Amount ($)", 
+                min_value=0.01, 
+                step=1.00, 
+                format="%.2f", 
+                key="f_pay_amt"
+            )
             from_account = st.selectbox("Paid From", ["BofA 5522 (Checking)", "SECU 4987 (Savings)"], key="f_pay_from")
-            all_ccs = [c["name"] for c in personal_cc_definitions] + [c["name"] for c in biz_cc_definitions]
-            target_card = st.selectbox("Credit Card Paid", all_ccs, key="f_pay_to")
             pay_item = st.text_input("Payment Memo (Optional)", placeholder="e.g. Statement balance payoff, AZEO adjustment", key="f_pay_item")
             pay_date = st.date_input("Date", value=datetime.today(), key="f_pay_date")
             
@@ -449,7 +466,7 @@ with tabs[0]:
                     st.rerun()
                 except Exception as err:
                     st.error(f"❌ Write Error: {str(err)}\n{traceback.format_exc()}")
-
+                    
 # ------------------------------------------
 # TAB 2: ANALYTICS & CHARTS (STACKED BLOCKS)
 # ------------------------------------------
