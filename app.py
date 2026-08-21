@@ -623,22 +623,23 @@ with tabs[2]:
     st.subheader("🏦 Cash & Checking Spread")
     st.caption("How your liquid cash is distributed across checking and savings.")
     
-    for acc in cash_registry:
-        pct_of_total = (acc["base"] / total_cash) * 100 if total_cash > 0 else 0.0
-        st.markdown(f"""
-        <div style="background:#1E293B; border-radius:10px; padding:12px 14px; margin-bottom:8px; border:1px solid #334155;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{acc['name']}</span>
-                    <div style="font-size:12px; color:#94A3B8;">{acc['role']}</div>
-                </div>
-                <div style="text-align:right;">
-                    <span style="font-weight:700; font-size:16px; color:#38BDF8;">${acc['base']:,.2f}</span>
-                    <div style="font-size:11px; color:#64748B;">{pct_of_total:.1f}% of cash</div>
+    for acc in live_cash_registry:
+            bal = acc["current_balance"]
+            pct_of_total = (bal / total_cash) * 100 if total_cash > 0 else 0.0
+            st.markdown(f"""
+            <div style="background:#1E293B; border-radius:10px; padding:12px 14px; margin-bottom:8px; border:1px solid #334155;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{acc['name']}</span>
+                        <div style="font-size:12px; color:#94A3B8;">{acc['role']}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="font-weight:700; font-size:16px; color:#38BDF8;">${bal:,.2f}</span>
+                        <div style="font-size:11px; color:#64748B;">{pct_of_total:.1f}% of cash</div>
+                    </div>
                 </div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
 
     st.divider()
 
