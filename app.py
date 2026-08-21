@@ -146,7 +146,7 @@ def get_next_recurring_date(target_day: int, ref_date: date) -> date:
     return cand
 
 # ==========================================
-# 3. DIRECT GSHEETS CONNECTION & WRITER
+# 3. DIRECT GSHEETS CONNECTION & DYNAMIC LEDGER
 # ==========================================
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -195,10 +195,30 @@ def get_ledger_data():
 
 df_tx = get_ledger_data()
 
-cash_registry = [
+# Baseline starting points
+cash_registry_def = [
     {"name": "BofA 5522", "role": "Primary Operating Checking", "base": 251.67},
     {"name": "SECU 4987", "role": "Dedicated Home Savings / HYSA", "base": 4212.10}
 ]
+
+# 1. DYNAMIC CASH BALANCES (Accounts for Income, Checking Expenses, and CC Payments)
+live_cash_registry = []
+for acc in cash_registry_def:
+    a_name = acc["name"]
+    # Income deposited into this account
+    inc_val = df_tx[(df_tx["Account"] == a_name) & (df_tx["Type"] == "Income")]["Amount"].sum()
+    # Expenses paid directly from this cash account
+    exp_val = df_tx[(df_tx["Account"] == a_name) & (df_tx["Type"] == "Expense")]["Amount"].sum()
+    # CC Payments sent FROM this account (stored in Merchant as "Paid from <Account>")
+    cc_paid_out = df_tx[(df_tx["Type"] == "CC Payment") & (df_tx["Merchant"].str.contains(a_name, na=False))]["Amount"].sum()
+    
+    current_cash = acc["base"] + inc_val - exp_val - cc_paid_out
+    
+    acc_dict = dict(acc)
+    acc_dict["current_balance"] = max(current_cash, 0.0)
+    live_cash_registry.append(acc_dict)
+
+total_cash = sum(c["current_balance"] for c in live_cash_registry)
 
 # Personal CC definitions with recurring schedule days
 personal_cc_definitions = [
@@ -214,7 +234,7 @@ biz_cc_definitions = [
     {"name": "Chase 0431", "base": 505.07, "limit": 0.00, "due_day": 1, "close_day": 7, "is_business": True, "target": "Business Expense"}
 ]
 
-# Build live personal CC list with dynamically rolling dates
+# 2. DYNAMIC PERSONAL CC BALANCES
 live_personal_cc = []
 for card in personal_cc_definitions:
     c_name = card["name"]
@@ -234,7 +254,7 @@ for card in personal_cc_definitions:
     card_dict["pay_by_str"] = f"By {pay_by_date.strftime('%b %d')}"
     live_personal_cc.append(card_dict)
 
-# Build live business CC list with rolling dates
+# 3. DYNAMIC BUSINESS CC BALANCES
 live_biz_cc = []
 for card in biz_cc_definitions:
     c_name = card["name"]
@@ -253,7 +273,6 @@ for card in biz_cc_definitions:
     card_dict["pay_by_str"] = f"By {pay_by_date.strftime('%b %d')}"
     live_biz_cc.append(card_dict)
 
-total_cash = sum(c["base"] for c in cash_registry)
 personal_cc_debt = sum(c["current_balance"] for c in live_personal_cc)
 personal_cc_limit = sum(c["limit"] for c in live_personal_cc)
 personal_utilization = (personal_cc_debt / personal_cc_limit) * 100 if personal_cc_limit > 0 else 0.0
