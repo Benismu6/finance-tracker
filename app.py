@@ -190,7 +190,7 @@ def get_ledger_data():
         pass
     return pd.DataFrame(columns=[
         "Transaction_ID", "Date", "Account", "Type", "Category", 
-        "Merchant", "Amount", "Goal_Tag", "Notes"
+        "Merchant", "Amount", "Goal_Tag", "Item_Description", "Notes"
     ])
 
 df_tx = get_ledger_data()
@@ -335,7 +335,8 @@ with tabs[0]:
             amt = st.number_input("Amount ($)", min_value=0.01, step=1.00, format="%.2f", key="f_exp_amt")
             selected_acc = st.selectbox("Card / Account", account_dropdown, index=0, key="f_exp_acc")
             selected_cat = st.selectbox("Category", categories_list, key="f_exp_cat")
-            vendor = st.text_input("Merchant / Description", placeholder="e.g. Shell, Trader Joe's, Chipotle", key="f_exp_ven")
+            vendor = st.text_input("Merchant / Store", placeholder="e.g. Amazon, Shell, Trader Joe's", key="f_exp_ven")
+            item_desc = st.text_input("Item Description / What was bought? (Optional)", placeholder="e.g. Phone case, Air filter, Work lunch", key="f_exp_item")
             entry_date = st.date_input("Date", value=datetime.today(), key="f_exp_date")
             goal_tag = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"], key="f_exp_gt")
             
@@ -353,6 +354,7 @@ with tabs[0]:
                     vendor,
                     float(amt),
                     goal_tag,
+                    item_desc,
                     "Mobile App Entry"
                 ]
                 try:
@@ -367,7 +369,8 @@ with tabs[0]:
             inc_amt = st.number_input("Amount ($)", min_value=0.01, step=1.00, format="%.2f", key="f_inc_amt")
             inc_acc = st.selectbox("Deposit Into", ["BofA 5522 (Checking)", "SECU 4987 (Savings / Home Fund)"], key="f_inc_acc")
             inc_cat = st.selectbox("Income Source", ["W2 Salary", "Uber Income", "Other Income"], key="f_inc_cat")
-            inc_desc = st.text_input("Note", placeholder="e.g. Bi-weekly Paycheck, Uber Payout", key="f_inc_desc")
+            inc_desc = st.text_input("Payer / Source", placeholder="e.g. Employer Payroll, Uber Payout", key="f_inc_desc")
+            inc_item = st.text_input("Income Memo / Details (Optional)", placeholder="e.g. Pay period 8/1-8/15, Weekend boost", key="f_inc_item")
             inc_date = st.date_input("Date", value=datetime.today(), key="f_inc_date")
             
             if st.form_submit_button("Record Income"):
@@ -385,6 +388,7 @@ with tabs[0]:
                     inc_desc,
                     float(inc_amt),
                     goal,
+                    inc_item,
                     "Mobile App Entry"
                 ]
                 try:
@@ -400,6 +404,7 @@ with tabs[0]:
             from_account = st.selectbox("Paid From", ["BofA 5522 (Checking)", "SECU 4987 (Savings)"], key="f_pay_from")
             all_ccs = [c["name"] for c in personal_cc_definitions] + [c["name"] for c in biz_cc_definitions]
             target_card = st.selectbox("Credit Card Paid", all_ccs, key="f_pay_to")
+            pay_item = st.text_input("Payment Memo (Optional)", placeholder="e.g. Statement balance payoff, AZEO adjustment", key="f_pay_item")
             pay_date = st.date_input("Date", value=datetime.today(), key="f_pay_date")
             
             if st.form_submit_button("Record CC Payment"):
@@ -416,6 +421,7 @@ with tabs[0]:
                     f"Paid from {clean_from}",
                     float(pay_amt),
                     "General Living",
+                    pay_item,
                     "Mobile App Entry"
                 ]
                 try:
