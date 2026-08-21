@@ -298,7 +298,7 @@ def generate_ai_insights():
         api_key = get_gemini_api_key()
         if api_key:
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            model = genai.GenerativeModel("gemini-2.5-flash")
             prompt = f"""
             Act as an elite financial advisor. Provide a concise 2-sentence update:
             - Net Liquid Cash: ${net_liquid_cash:,.2f} (Total Cash: ${total_cash:,.2f}, Personal CCs: ${personal_cc_debt:,.2f}, Biz CC: ${biz_cc_debt:,.2f}).
@@ -769,25 +769,20 @@ with tabs[4]:
     st.subheader("💬 AI Financial Advisor")
     st.caption("Ask questions about your budget, credit card AZEO strategy, spending habits, or home purchase goal.")
 
-    # Initialize chat history in session state
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = [
             {"role": "assistant", "content": "Hey! I have real-time access to your ledger, balances, and $26.5k Baltimore home purchase target. What would you like to check or plan today?"}
         ]
 
-    # Display chat history
     for msg in st.session_state.chat_messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # Chat input box
     if user_prompt := st.chat_input("Ask a question about your finances..."):
-        # Display and record user message
         st.session_state.chat_messages.append({"role": "user", "content": user_prompt})
         with st.chat_message("user"):
             st.markdown(user_prompt)
 
-        # Build dynamic context from live data
         recent_tx_summary = df_tx.tail(15).to_dict(orient="records") if not df_tx.empty else "No transactions logged yet."
         
         system_context = f"""
@@ -810,11 +805,10 @@ with tabs[4]:
                 if api_key:
                     genai.configure(api_key=api_key)
                     model = genai.GenerativeModel(
-                        "gemini-1.5-flash",
+                        "gemini-2.5-flash",
                         system_instruction=system_context
                     )
                     
-                    # Convert chat history for Gemini API
                     history_payload = []
                     for m in st.session_state.chat_messages[:-1]:
                         gemini_role = "user" if m["role"] == "user" else "model"
