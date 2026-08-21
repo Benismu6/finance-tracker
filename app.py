@@ -309,7 +309,7 @@ def generate_ai_insights():
 # ==========================================
 # 5. APP TABS
 # ==========================================
-tabs = st.tabs(["⚡ Command Center", "📊 Analytics & Charts", "💳 Accounts & Credit Hub", "🏠 Home Goal"])
+tabs = st.tabs(["⚡ Command Center", "📊 Analytics & Charts", "💳 Accounts & Credit Hub", "🏠 Home Goal", "💬 AI Advisor"])
 
 # ------------------------------------------
 # TAB 1: COMMAND CENTER
@@ -758,3 +758,72 @@ with tabs[3]:
     * **Post-Closing 3-Mo Reserves:** $6,500
     * **Total Liquid Target:** **$26,500**
     """)
+
+# ------------------------------------------
+# TAB 5: AI FINANCIAL ADVISOR CHATBOT
+# ------------------------------------------
+with tabs[4]:
+    st.subheader("💬 AI Financial Advisor")
+    st.caption("Ask questions about your budget, credit card AZEO strategy, spending habits, or home purchase goal.")
+
+    # Initialize chat history in session state
+    if "chat_messages" not in st.session_state:
+        st.session_state.chat_messages = [
+            {"role": "assistant", "content": "Hey! I have real-time access to your ledger, balances, and $26.5k Baltimore home purchase target. What would you like to check or plan today?"}
+        ]
+
+    # Display chat history
+    for msg in st.session_state.chat_messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    # Chat input box
+    if user_prompt := st.chat_input("Ask a question about your finances..."):
+        # Display and record user message
+        st.session_state.chat_messages.append({"role": "user", "content": user_prompt})
+        with st.chat_message("user"):
+            st.markdown(user_prompt)
+
+        # Build dynamic context from live data
+        recent_tx_summary = df_tx.tail(15).to_dict(orient="records") if not df_tx.empty else "No transactions logged yet."
+        
+        system_context = f"""
+        You are an elite, highly knowledgeable personal financial advisor and real estate strategist assisting the user.
+        You have direct access to their live financial snapshot:
+        - Total Cash on Hand: ${total_cash:,.2f} (BofA Checking: ${live_cash_registry[0]['current_balance']:,.2f}, SECU HYSA Home Fund: ${live_cash_registry[1]['current_balance']:,.2f})
+        - Total Personal CC Debt: ${personal_cc_debt:,.2f} across ${personal_cc_limit:,.2f} limit (Overall Util: {personal_utilization:.2f}%)
+        - Business CC Debt: ${biz_cc_debt:,.2f} (Chase 0431)
+        - Net Liquid Cash: ${net_liquid_cash:,.2f}
+        - 1st Home Goal: $26,500 target by March 1, 2027 (${total_cash:,.2f} saved so far, ${remaining_goal:,.2f} remaining).
+        - AZEO Strategy: Maintain Chase 2207 at ~$10 (1% reporting) and all other cards at $0 reporting by statement close dates.
+        - Recent 15 Ledger Entries: {recent_tx_summary}
+
+        Provide direct, helpful, and concise guidance. When mentioning money, escape dollar signs with a backslash (e.g. \\$200) to prevent LaTeX formatting glitches.
+        """
+
+        with st.chat_message("assistant"):
+            try:
+                api_key = st.secrets.get("GEMINI_API_KEY")
+                if api_key:
+                    genai.configure(api_key=api_key)
+                    model = genai.GenerativeModel(
+                        "gemini-1.5-flash",
+                        system_instruction=system_context
+                    )
+                    
+                    # Convert chat history for Gemini API
+                    history_payload = []
+                    for m in st.session_state.chat_messages[:-1]:
+                        gemini_role = "user" if m["role"] == "user" else "model"
+                        history_payload.append({"role": gemini_role, "parts": [m["content"]]})
+
+                    chat_session = model.start_chat(history=history_payload)
+                    response = chat_session.send_message(user_prompt)
+                    bot_reply = response.text.replace("$", r"\$")
+                else:
+                    bot_reply = "⚠️ GEMINI_API_KEY is not configured in your Streamlit Secrets. Please add your key to enable live AI responses."
+            except Exception as e:
+                bot_reply = f"⚠️ Could not generate response: {e}"
+
+            st.markdown(bot_reply)
+            st.session_state.chat_messages.append({"role": "assistant", "content": bot_reply})
