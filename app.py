@@ -278,7 +278,7 @@ biz_cc_definitions = [
     {"name": "Chase 0431", "base": 505.07, "limit": 0.00, "due_day": 1, "close_day": 7, "is_business": True}
 ]
 
-# 2. PROCESS CARDS WITH DATE-AWARE STATEMENT BALANCES
+# 2. PROCESS CARDS WITH PRECISE STATEMENT VS LIVE BALANCE MATH
 raw_personal_cards = []
 for card in personal_cc_definitions:
     c_name = card["name"]
@@ -369,7 +369,7 @@ HOME_GOAL = 26500.00
 goal_progress = min(total_cash / HOME_GOAL, 1.0)
 remaining_goal = max(HOME_GOAL - total_cash, 0.0)
 
-# Categories master list
+# Categories Master List
 categories_list = [
     "Groceries & Food", "Vehicle & Gas", "Housing & Rent", 
     "Dining Out & Coffee", "Utilities & Phone", "Personal & Entertainment", 
@@ -535,9 +535,15 @@ def fetch_ai_insights_cached(net_cash, tot_cash, p_debt, b_debt, p_util, azeo_ca
     return f"💡 **Executive Snapshot:** Net liquid cash stands at \\${net_cash:,.2f} with credit utilization optimized at {p_util:.2f}%. Maintain {azeo_card} at ~\\$10 for your AZEO boost while clearing non-AZEO cards to \\$0."
 
 # ==========================================
-# 6. APP TABS & UI RENDERING
+# 6. APP TABS & RE-ORDERED UI RENDERING
 # ==========================================
-tabs = st.tabs(["⚡ Command Center", "📊 Analytics & Charts", "💳 Accounts & Credit Hub", "🏠 Home Goal", "💬 AI Advisor"])
+tabs = st.tabs([
+    "⚡ Command Center", 
+    "💳 Accounts & Credit Hub", 
+    "📊 Analytics & Charts", 
+    "🏠 Home Goal", 
+    "💬 AI Advisor"
+])
 
 account_dropdown = [
     "Chase 1993 (Primary Daily)",
@@ -725,120 +731,9 @@ with tabs[0]:
                     st.error(f"❌ Write Error: {str(err)}\n{traceback.format_exc()}")
 
 # ------------------------------------------
-# TAB 2: ANALYTICS & CHARTS
+# TAB 2: ACCOUNTS & CREDIT HUB (TAB #2)
 # ------------------------------------------
 with tabs[1]:
-    st.subheader("📊 Financial Analytics & Trends")
-
-    if "selected_date" not in st.session_state:
-        st.session_state.selected_date = date.today()
-
-    with st.expander("📅 Jump to Specific Date / Past Year", expanded=False):
-        picked_date = st.date_input(
-            "Select date to view:",
-            value=st.session_state.selected_date,
-            key="jump_calendar_picker"
-        )
-        if picked_date != st.session_state.selected_date:
-            st.session_state.selected_date = picked_date
-            st.rerun()
-
-    ref_date = st.session_state.selected_date
-    df_clean = df_tx.copy() if not df_tx.empty else pd.DataFrame()
-
-    week_start = ref_date - timedelta(days=ref_date.weekday())
-    week_end = week_start + timedelta(days=6)
-
-    st.markdown("### 🗓️ Weekly Analytics")
-    w_col1, w_col2, w_col3 = st.columns([1, 4, 1])
-    with w_col1:
-        if st.button("◀", key="prev_week_btn"):
-            st.session_state.selected_date = ref_date - timedelta(days=7)
-            st.rerun()
-    with w_col2:
-        st.markdown(
-            f"<div style='text-align:center; font-weight:700; font-size:14px; color:#38BDF8; padding-top:8px;'>"
-            f"{week_start.strftime('%b %d')} – {week_end.strftime('%b %d, %Y')}</div>",
-            unsafe_allow_html=True
-        )
-    with w_col3:
-        if st.button("▶", key="next_week_btn"):
-            st.session_state.selected_date = ref_date + timedelta(days=7)
-            st.rerun()
-
-    df_week = df_clean[(df_clean["Date_DT"] >= week_start) & (df_clean["Date_DT"] <= week_end)] if not df_clean.empty else pd.DataFrame()
-    w_income = df_week[df_week["Type"] == "Income"]["Amount"].sum() if not df_week.empty else 0.0
-    w_expense = df_week[df_week["Type"] == "Expense"]["Amount"].sum() if not df_week.empty else 0.0
-    w_net = w_income - w_expense
-
-    ws_1, ws_2, ws_3 = st.columns(3)
-    with ws_1:
-        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">INCOME</div><div style="font-size:16px; font-weight:800; color:#34D399;">+${w_income:,.2f}</div></div>""", unsafe_allow_html=True)
-    with ws_2:
-        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">EXPENSES</div><div style="font-size:16px; font-weight:800; color:#F87171;">-${w_expense:,.2f}</div></div>""", unsafe_allow_html=True)
-    with ws_3:
-        net_color = "#38BDF8" if w_net >= 0 else "#F87171"
-        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">NET CASH</div><div style="font-size:16px; font-weight:800; color:{net_color};">${w_net:,.2f}</div></div>""", unsafe_allow_html=True)
-
-    w_exp_df = df_week[df_week["Type"] == "Expense"] if not df_week.empty else pd.DataFrame()
-    if not w_exp_df.empty:
-        w_cat_summary = w_exp_df.groupby("Category")["Amount"].sum().reset_index()
-        fig_week_pie = px.pie(
-            w_cat_summary, values="Amount", names="Category", hole=0.5,
-            title=f"Week of {week_start.strftime('%b %d')} Spending",
-            color_discrete_sequence=px.colors.qualitative.Pastel
-        )
-        fig_week_pie.update_layout(
-            margin=dict(l=10, r=10, t=35, b=10), height=260, showlegend=True,
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#CBD5E1")
-        )
-        st.plotly_chart(fig_week_pie, use_container_width=True)
-
-    st.divider()
-
-    m_year, m_month = ref_date.year, ref_date.month
-    month_start = date(m_year, m_month, 1)
-    month_end = date(m_year, m_month, calendar.monthrange(m_year, m_month)[1])
-
-    st.markdown("### 📆 Monthly Analytics")
-    m_col1, m_col2, m_col3 = st.columns([1, 4, 1])
-    with m_col1:
-        if st.button("◀", key="prev_month_btn"):
-            prev_m = m_month - 1 if m_month > 1 else 12
-            prev_y = m_year if m_month > 1 else m_year - 1
-            st.session_state.selected_date = date(prev_y, prev_m, 1)
-            st.rerun()
-    with m_col2:
-        st.markdown(
-            f"<div style='text-align:center; font-weight:700; font-size:16px; color:#38BDF8; padding-top:8px;'>"
-            f"{month_start.strftime('%B %Y')}</div>",
-            unsafe_allow_html=True
-        )
-    with m_col3:
-        if st.button("▶", key="next_month_btn"):
-            next_m = m_month + 1 if m_month < 12 else 1
-            next_y = m_year if m_month < 12 else m_year + 1
-            st.session_state.selected_date = date(next_y, next_m, 1)
-            st.rerun()
-
-    df_month = df_clean[(df_clean["Date_DT"] >= month_start) & (df_clean["Date_DT"] <= month_end)] if not df_clean.empty else pd.DataFrame()
-    m_income = df_month[df_month["Type"] == "Income"]["Amount"].sum() if not df_month.empty else 0.0
-    m_expense = df_month[df_month["Type"] == "Expense"]["Amount"].sum() if not df_month.empty else 0.0
-    m_net = m_income - m_expense
-
-    ms_1, ms_2, ms_3 = st.columns(3)
-    with ms_1:
-        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">MONTH INCOME</div><div style="font-size:16px; font-weight:800; color:#34D399;">+${m_income:,.2f}</div></div>""", unsafe_allow_html=True)
-    with ms_2:
-        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">MONTH EXPENSES</div><div style="font-size:16px; font-weight:800; color:#F87171;">-${m_expense:,.2f}</div></div>""", unsafe_allow_html=True)
-    with ms_3:
-        m_net_color = "#38BDF8" if m_net >= 0 else "#F87171"
-        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">MONTH NET</div><div style="font-size:16px; font-weight:800; color:{m_net_color};">${m_net:,.2f}</div></div>""", unsafe_allow_html=True)
-
-# ------------------------------------------
-# TAB 3: ACCOUNTS & CREDIT HUB (DYNAMIC MODALS)
-# ------------------------------------------
-with tabs[2]:
     st.subheader("🏦 Cash & Checking Spread")
     st.caption("All balances update live. Click any card below to open its ledger or record actions.")
     
@@ -932,6 +827,166 @@ with tabs[2]:
             st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
             if st.button(f"⚡ Manage / Record on {c['name']}", key=f"btn_biz_{c['name']}"):
                 open_card_action_dialog(c["name"], bal)
+
+# ------------------------------------------
+# TAB 3: ANALYTICS & CHARTS (TAB #3 - FULLY SYNCED NAVIGATION)
+# ------------------------------------------
+with tabs[2]:
+    st.subheader("📊 Financial Analytics & Trends")
+
+    # Master state initialization
+    if "selected_date" not in st.session_state:
+        st.session_state.selected_date = date.today()
+
+    def update_selected_date_from_picker():
+        st.session_state.selected_date = st.session_state.jump_calendar_picker
+
+    with st.expander("📅 Jump to Specific Date / Past Year", expanded=False):
+        st.date_input(
+            "Select any date to view historical analytics:",
+            value=st.session_state.selected_date,
+            key="jump_calendar_picker",
+            on_change=update_selected_date_from_picker
+        )
+
+    ref_date = st.session_state.selected_date
+    df_clean = df_tx.copy() if not df_tx.empty else pd.DataFrame()
+
+    # BLOCK 1: WEEKLY ANALYTICS
+    week_start = ref_date - timedelta(days=ref_date.weekday())
+    week_end = week_start + timedelta(days=6)
+
+    st.markdown("### 🗓️ Weekly Analytics")
+    
+    w_col1, w_col2, w_col3 = st.columns([1, 4, 1])
+    with w_col1:
+        if st.button("◀", key="prev_week_btn", help="Previous Week"):
+            new_dt = ref_date - timedelta(days=7)
+            st.session_state.selected_date = new_dt
+            st.session_state.jump_calendar_picker = new_dt
+            st.rerun()
+    with w_col2:
+        st.markdown(
+            f"<div style='text-align:center; font-weight:700; font-size:14px; color:#38BDF8; padding-top:8px;'>"
+            f"{week_start.strftime('%b %d')} – {week_end.strftime('%b %d, %Y')}</div>",
+            unsafe_allow_html=True
+        )
+    with w_col3:
+        if st.button("▶", key="next_week_btn", help="Next Week"):
+            new_dt = ref_date + timedelta(days=7)
+            st.session_state.selected_date = new_dt
+            st.session_state.jump_calendar_picker = new_dt
+            st.rerun()
+
+    df_week = df_clean[(df_clean["Date_DT"] >= week_start) & (df_clean["Date_DT"] <= week_end)] if not df_clean.empty else pd.DataFrame()
+    w_income = df_week[df_week["Type"] == "Income"]["Amount"].sum() if not df_week.empty else 0.0
+    w_expense = df_week[df_week["Type"] == "Expense"]["Amount"].sum() if not df_week.empty else 0.0
+    w_net = w_income - w_expense
+
+    ws_1, ws_2, ws_3 = st.columns(3)
+    with ws_1:
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">INCOME</div><div style="font-size:16px; font-weight:800; color:#34D399;">+${w_income:,.2f}</div></div>""", unsafe_allow_html=True)
+    with ws_2:
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">EXPENSES</div><div style="font-size:16px; font-weight:800; color:#F87171;">-${w_expense:,.2f}</div></div>""", unsafe_allow_html=True)
+    with ws_3:
+        net_color = "#38BDF8" if w_net >= 0 else "#F87171"
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">NET CASH</div><div style="font-size:16px; font-weight:800; color:{net_color};">${w_net:,.2f}</div></div>""", unsafe_allow_html=True)
+
+    w_exp_df = df_week[df_week["Type"] == "Expense"] if not df_week.empty else pd.DataFrame()
+    if not w_exp_df.empty:
+        w_cat_summary = w_exp_df.groupby("Category")["Amount"].sum().reset_index()
+        fig_week_pie = px.pie(
+            w_cat_summary, values="Amount", names="Category", hole=0.5,
+            title=f"Week of {week_start.strftime('%b %d')} Spending",
+            color_discrete_sequence=px.colors.qualitative.Pastel
+        )
+        fig_week_pie.update_layout(
+            margin=dict(l=10, r=10, t=35, b=10), height=260, showlegend=True,
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#CBD5E1")
+        )
+        st.plotly_chart(fig_week_pie, use_container_width=True)
+    else:
+        st.caption("ℹ️ No expenses recorded for this specific week.")
+
+    st.divider()
+
+    # BLOCK 2: MONTHLY ANALYTICS
+    m_year, m_month = ref_date.year, ref_date.month
+    month_start = date(m_year, m_month, 1)
+    month_end = date(m_year, m_month, calendar.monthrange(m_year, m_month)[1])
+
+    st.markdown("### 📆 Monthly Analytics")
+    m_col1, m_col2, m_col3 = st.columns([1, 4, 1])
+    with m_col1:
+        if st.button("◀", key="prev_month_btn", help="Previous Month"):
+            prev_m = m_month - 1 if m_month > 1 else 12
+            prev_y = m_year if m_month > 1 else m_year - 1
+            new_dt = date(prev_y, prev_m, 1)
+            st.session_state.selected_date = new_dt
+            st.session_state.jump_calendar_picker = new_dt
+            st.rerun()
+    with m_col2:
+        st.markdown(
+            f"<div style='text-align:center; font-weight:700; font-size:16px; color:#38BDF8; padding-top:8px;'>"
+            f"{month_start.strftime('%B %Y')}</div>",
+            unsafe_allow_html=True
+        )
+    with m_col3:
+        if st.button("▶", key="next_month_btn", help="Next Month"):
+            next_m = m_month + 1 if m_month < 12 else 1
+            next_y = m_year if m_month < 12 else m_year + 1
+            new_dt = date(next_y, next_m, 1)
+            st.session_state.selected_date = new_dt
+            st.session_state.jump_calendar_picker = new_dt
+            st.rerun()
+
+    df_month = df_clean[(df_clean["Date_DT"] >= month_start) & (df_clean["Date_DT"] <= month_end)] if not df_clean.empty else pd.DataFrame()
+    m_income = df_month[df_month["Type"] == "Income"]["Amount"].sum() if not df_month.empty else 0.0
+    m_expense = df_month[df_month["Type"] == "Expense"]["Amount"].sum() if not df_month.empty else 0.0
+    m_net = m_income - m_expense
+
+    ms_1, ms_2, ms_3 = st.columns(3)
+    with ms_1:
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">MONTH INCOME</div><div style="font-size:16px; font-weight:800; color:#34D399;">+${m_income:,.2f}</div></div>""", unsafe_allow_html=True)
+    with ms_2:
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">MONTH EXPENSES</div><div style="font-size:16px; font-weight:800; color:#F87171;">-${m_expense:,.2f}</div></div>""", unsafe_allow_html=True)
+    with ms_3:
+        m_net_color = "#38BDF8" if m_net >= 0 else "#F87171"
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">MONTH NET</div><div style="font-size:16px; font-weight:800; color:{m_net_color};">${m_net:,.2f}</div></div>""", unsafe_allow_html=True)
+
+    m_exp_df = df_month[df_month["Type"] == "Expense"] if not df_month.empty else pd.DataFrame()
+    if not m_exp_df.empty:
+        m_cat_summary = m_exp_df.groupby("Category")["Amount"].sum().reset_index()
+        fig_month_pie = px.pie(
+            m_cat_summary, values="Amount", names="Category", hole=0.55,
+            title=f"{month_start.strftime('%B %Y')} Full Breakdown",
+            color_discrete_sequence=px.colors.qualitative.Prism
+        )
+        fig_month_pie.update_layout(
+            margin=dict(l=10, r=10, t=35, b=10), height=280, showlegend=True,
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#CBD5E1")
+        )
+        st.plotly_chart(fig_month_pie, use_container_width=True)
+    else:
+        st.caption(f"ℹ️ No expenses recorded yet for {month_start.strftime('%B %Y')}.")
+
+    st.markdown("#### 🔍 Jump to a Week in this Month:")
+    curr_w_start = month_start - timedelta(days=month_start.weekday())
+    week_buttons = []
+    while curr_w_start <= month_end:
+        curr_w_end = curr_w_start + timedelta(days=6)
+        week_buttons.append((curr_w_start, curr_w_end))
+        curr_w_start += timedelta(days=7)
+
+    for i in range(0, len(week_buttons), 2):
+        b_cols = st.columns(2)
+        for j, (w_s, w_e) in enumerate(week_buttons[i:i+2]):
+            with b_cols[j]:
+                label = f"{w_s.strftime('%b %d')} – {w_e.strftime('%b %d')}"
+                if st.button(f"🔎 {label}", key=f"btn_w_{w_s.strftime('%Y%m%d')}"):
+                    st.session_state.selected_date = w_s
+                    st.session_state.jump_calendar_picker = w_s
+                    st.rerun()
 
 # ------------------------------------------
 # TAB 4: GOALS HUB
