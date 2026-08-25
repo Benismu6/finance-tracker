@@ -122,10 +122,6 @@ st.markdown("""
 today_dt = date.today()
 
 def get_next_recurring_date(target_day: int, ref_date: date) -> date:
-    """
-    Computes the NEXT upcoming date for recurring monthly schedules.
-    target_day = -1 indicates last day of month.
-    """
     y, m = ref_date.year, ref_date.month
     if target_day == -1:
         last_day = calendar.monthrange(y, m)[1]
@@ -151,12 +147,7 @@ def get_next_recurring_date(target_day: int, ref_date: date) -> date:
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def append_tx_to_sheet(row_values):
-    """
-    Directly authenticates via gspread with filtered Service Account credentials
-    from st.secrets to append a row safely and reliably.
-    """
     gs_secrets = dict(st.secrets["connections"]["gsheets"])
-    
     sa_keys = [
         "type", "project_id", "private_key_id", "private_key",
         "client_email", "client_id", "auth_uri", "token_uri",
@@ -201,7 +192,7 @@ cash_registry_def = [
     {"name": "SECU 4987", "role": "Dedicated Home Savings / HYSA", "base": 4212.10}
 ]
 
-# 1. DYNAMIC CASH BALANCES (Accounts for Income, Checking Expenses, and CC Payments)
+# 1. DYNAMIC CASH BALANCES
 live_cash_registry = []
 for acc in cash_registry_def:
     a_name = acc["name"]
@@ -217,7 +208,7 @@ for acc in cash_registry_def:
 
 total_cash = sum(c["current_balance"] for c in live_cash_registry)
 
-# Personal CC definitions with recurring schedule days
+# Personal CC definitions
 personal_cc_definitions = [
     {"name": "Chase 1993", "base": 517.70, "limit": 10600.00, "due_day": 1, "close_day": 4, "is_primary": True, "target": "$0.00"},
     {"name": "Chase 2207", "base": 9.52, "limit": 4900.00, "due_day": 1, "close_day": 4, "is_azeo_active": True, "target": "~$10.00 (1%)"},
@@ -286,14 +277,14 @@ remaining_goal = max(HOME_GOAL - total_cash, 0.0)
 # 4. AI EXECUTIVE SUMMARY & KEY FETCHER
 # ==========================================
 def get_gemini_api_key():
-    """Finds GEMINI_API_KEY regardless of root or nested secrets placement."""
     if "GEMINI_API_KEY" in st.secrets:
         return st.secrets["GEMINI_API_KEY"]
     if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
         return st.secrets["connections"]["gsheets"].get("GEMINI_API_KEY", None)
     return None
 
-def generate_ai_insights():
+@st.cache_data(ttl=300, show_spinner=False)
+def fetch_ai_insights_cached(net_cash, tot_cash, p_debt, b_debt, p_util, p_lim):
     try:
         api_key = get_gemini_api_key()
         if api_key:
@@ -301,8 +292,8 @@ def generate_ai_insights():
             model = genai.GenerativeModel("gemini-3.6-flash")
             prompt = f"""
             Act as an elite financial advisor. Provide a concise 2-sentence update:
-            - Net Liquid Cash: ${net_liquid_cash:,.2f} (Total Cash: ${total_cash:,.2f}, Personal CCs: ${personal_cc_debt:,.2f}, Biz CC: ${biz_cc_debt:,.2f}).
-            - Personal Credit Util: {personal_utilization:.2f}% across ${personal_cc_limit:,.2f} limit.
+            - Net Liquid Cash: ${net_cash:,.2f} (Total Cash: ${tot_cash:,.2f}, Personal CCs: ${p_debt:,.2f}, Biz CC: ${b_debt:,.2f}).
+            - Personal Credit Util: {p_util:.2f}% across ${p_lim:,.2f} limit.
             - Upcoming Actions: Pay BofA 5309 and BofA 7197 by Aug 23. Pay Chase 1993 and Chase 0431 by Aug 31. Keep Chase 2207 at $9.52 for AZEO boost.
             """
             response = model.generate_content(prompt)
@@ -312,7 +303,7 @@ def generate_ai_insights():
     return r"💡 **Key Next Steps:** Pay off BofA 5309 (\$22.21) & BofA 7197 (\$37.12) by August 23 to report \$0 on statement close. Maintain Chase 2207 at ~\$10 for AZEO personal credit optimization."
 
 # ==========================================
-# 5. APP TABS
+# 5. APP TABS & INSTANT UI RENDERING
 # ==========================================
 tabs = st.tabs(["⚡ Command Center", "📊 Analytics & Charts", "💳 Accounts & Credit Hub", "🏠 Home Goal", "💬 AI Advisor"])
 
@@ -331,7 +322,9 @@ with tabs[0]:
     </div>
     """, unsafe_allow_html=True)
     
-    st.info(generate_ai_insights())
+    # Non-blocking AI Summary Container Placeholder
+    ai_placeholder = st.empty()
+    ai_placeholder.caption("✨ *Fetching personalized AI insights...*")
 
     st.subheader("⚡ Fast Entry")
     tab_exp, tab_inc, tab_pay = st.tabs(["💸 Expense", "💵 Income", "🔄 CC Payment"])
@@ -469,7 +462,7 @@ with tabs[0]:
                     st.rerun()
                 except Exception as err:
                     st.error(f"❌ Write Error: {str(err)}\n{traceback.format_exc()}")
-                    
+
 # ------------------------------------------
 # TAB 2: ANALYTICS & CHARTS (STACKED BLOCKS)
 # ------------------------------------------
@@ -479,7 +472,6 @@ with tabs[1]:
     if "selected_date" not in st.session_state:
         st.session_state.selected_date = date.today()
 
-    # Global Calendar Jump
     with st.expander("📅 Jump to Specific Date / Past Year", expanded=False):
         picked_date = st.date_input(
             "Select any date to view historical analytics:",
@@ -492,7 +484,6 @@ with tabs[1]:
 
     ref_date = st.session_state.selected_date
 
-    # Prepare DataFrame
     df_clean = df_tx.copy() if (df_tx is not None and not df_tx.empty) else pd.DataFrame(columns=["Date", "Type", "Category", "Amount"])
     if not df_clean.empty and "Date" in df_clean.columns:
         df_clean["Date_DT"] = pd.to_datetime(df_clean["Date"], errors="coerce").dt.date
@@ -500,9 +491,7 @@ with tabs[1]:
     else:
         df_clean["Date_DT"] = pd.Series(dtype="object")
 
-    # ==========================================
-    # BLOCK 1: WEEKLY ANALYTICS (TOP BLOCK)
-    # ==========================================
+    # BLOCK 1: WEEKLY ANALYTICS
     week_start = ref_date - timedelta(days=ref_date.weekday())
     week_end = week_start + timedelta(days=6)
 
@@ -557,9 +546,7 @@ with tabs[1]:
 
     st.divider()
 
-    # ==========================================
-    # BLOCK 2: MONTHLY ANALYTICS (BOTTOM BLOCK)
-    # ==========================================
+    # BLOCK 2: MONTHLY ANALYTICS
     m_year, m_month = ref_date.year, ref_date.month
     month_start = date(m_year, m_month, 1)
     last_day_num = calendar.monthrange(m_year, m_month)[1]
@@ -618,7 +605,6 @@ with tabs[1]:
     else:
         st.caption(f"ℹ️ No expenses recorded yet for {month_start.strftime('%B %Y')}.")
 
-    # Clickable weeks inside this month
     st.markdown("#### 🔍 Jump to a Week in this Month:")
     curr_w_start = month_start - timedelta(days=month_start.weekday())
     week_buttons = []
@@ -824,3 +810,13 @@ with tabs[4]:
 
             st.markdown(bot_reply)
             st.session_state.chat_messages.append({"role": "assistant", "content": bot_reply})
+
+# ==========================================
+# 6. ASYNC POPULATE SUMMARY PLACEHOLDER (POST-UI RENDER)
+# ==========================================
+# The entire UI finishes building and displaying instantly first,
+# then populates the placeholder box with the cached/fresh AI insights.
+ai_insight_text = fetch_ai_insights_cached(
+    net_liquid_cash, total_cash, personal_cc_debt, biz_cc_debt, personal_utilization, personal_cc_limit
+)
+ai_placeholder.info(ai_insight_text)
