@@ -25,7 +25,6 @@ st.markdown("""
     header[data-testid="stHeader"], .stAppHeader, header { display: none !important; visibility: hidden !important; height: 0px !important; }
     div[data-testid="stDecoration"], #MainMenu, footer { display: none !important; visibility: hidden !important; }
 
-    /* Centered on Desktop at max 750px, Full-Width on Mobile */
     .block-container {
         padding-top: 1.2rem !important;
         padding-bottom: 2rem !important;
@@ -36,7 +35,6 @@ st.markdown("""
         margin-right: auto !important;
     }
     
-    /* Tab Container */
     div[data-baseweb="tab-list"] {
         background-color: #0F172A !important;
         border-radius: 12px !important;
@@ -48,7 +46,6 @@ st.markdown("""
         margin-bottom: 12px !important;
     }
     
-    /* Tab Buttons */
     div[data-baseweb="tab-list"] button, button[data-baseweb="tab"] {
         background-color: #1E293B !important;
         border-radius: 8px !important;
@@ -77,7 +74,6 @@ st.markdown("""
     }
     div[data-baseweb="tab-highlight"] { display: none !important; }
 
-    /* UI Hero Card */
     .hero-card {
         background: linear-gradient(135deg, #1E3A8A 0%, #0F172A 100%);
         border: 1px solid #3B82F6;
@@ -116,7 +112,6 @@ st.markdown("""
         box-shadow: 0 2px 6px rgba(37,99,235,0.4);
     }
     
-    /* ORIGINAL CARD BOX STYLING */
     .card-box {
         background-color: #1E293B;
         border-radius: 12px 12px 0px 0px;
@@ -127,7 +122,6 @@ st.markdown("""
         margin-bottom: 0px;
     }
 
-    /* ATTACHED CARD EXPANDER STYLING */
     div[data-testid="stExpander"] {
         border-top: none !important;
         border-left: 1px solid #334155 !important;
@@ -161,7 +155,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. ROLLING DATE CALCULATION ENGINE
+# 2. DATE & CYCLE CALCULATION ENGINE
 # ==========================================
 today_dt = date.today()
 
@@ -184,6 +178,23 @@ def get_next_recurring_date(target_day: int, ref_date: date) -> date:
         max_d_next = calendar.monthrange(next_y, next_m)[1]
         cand = date(next_y, next_m, min(target_day, max_d_next))
     return cand
+
+def get_prev_recurring_date(target_day: int, ref_date: date) -> date:
+    y, m = ref_date.year, ref_date.month
+    if target_day == -1:
+        prev_m = m - 1 if m > 1 else 12
+        prev_y = y if m > 1 else y - 1
+        return date(prev_y, prev_m, calendar.monthrange(prev_y, prev_m)[1])
+    
+    max_d = calendar.monthrange(y, m)[1]
+    cand = date(y, m, min(target_day, max_d))
+    if cand <= ref_date:
+        return cand
+    else:
+        prev_m = m - 1 if m > 1 else 12
+        prev_y = y if m > 1 else y - 1
+        max_d_prev = calendar.monthrange(prev_y, prev_m)[1]
+        return date(prev_y, prev_m, min(target_day, max_d_prev))
 
 # ==========================================
 # 3. DIRECT GSHEETS CONNECTION & DYNAMIC LEDGER
@@ -220,6 +231,7 @@ def get_ledger_data():
         df = conn.read(worksheet="Master_Transactions", ttl="0")
         if df is not None and not df.empty:
             df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce").fillna(0.0)
+            df["Date_DT"] = pd.to_datetime(df["Date"], errors="coerce").dt.date
             return df
     except Exception:
         pass
@@ -252,7 +264,7 @@ for acc in cash_registry_def:
 
 total_cash = sum(c["current_balance"] for c in live_cash_registry)
 
-# Personal CC definitions
+# Card Definitions
 personal_cc_definitions = [
     {"name": "Chase 1993", "base": 517.70, "limit": 10600.00, "due_day": 1, "close_day": 4, "is_primary": True},
     {"name": "Chase 2207", "base": 9.52, "limit": 4900.00, "due_day": 1, "close_day": 4},
@@ -266,50 +278,74 @@ biz_cc_definitions = [
     {"name": "Chase 0431", "base": 505.07, "limit": 0.00, "due_day": 1, "close_day": 7, "is_business": True}
 ]
 
-# Calculate raw live balances first to determine best AZEO candidate
-temp_personal_cards = []
+# 2. PROCESS CARDS WITH PRECISE STATEMENT VS LIVE BALANCE MATH
+raw_personal_cards = []
 for card in personal_cc_definitions:
     c_name = card["name"]
-    spent = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "Expense")]["Amount"].sum()
-    paid = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "CC Payment")]["Amount"].sum()
-    current_bal = max(card["base"] + spent - paid, 0.0)
-    temp_personal_cards.append({**card, "current_balance": current_bal})
-
-# DYNAMIC AZEO SELECTION:
-# Select the card with a non-zero balance closest to $10, or default to Chase 2207
-non_zero_cards = [c for c in temp_personal_cards if c["current_balance"] > 0]
-if non_zero_cards:
-    azeo_selected_card_name = min(non_zero_cards, key=lambda x: abs(x["current_balance"] - 10.0))["name"]
-else:
-    azeo_selected_card_name = "Chase 2207"
-
-# Build live personal CC list with dynamically rolling dates & status
-live_personal_cc = []
-for card in temp_personal_cards:
-    c_name = card["name"]
-    current_bal = card["current_balance"]
-    
+    last_close = get_prev_recurring_date(card["close_day"], today_dt)
     next_due = get_next_recurring_date(card["due_day"], today_dt)
     next_close = get_next_recurring_date(card["close_day"], today_dt)
+    
+    # Total historical spend & payments
+    spent_all = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "Expense")]["Amount"].sum()
+    paid_all = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "CC Payment")]["Amount"].sum()
+    current_live_bal = max(card["base"] + spent_all - paid_all, 0.0)
+    
+    # Statement Balance calculation: Base + charges before last close - all payments made
+    charges_prior = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "Expense") & (df_tx["Date_DT"] <= last_close)]["Amount"].sum()
+    stmt_balance_billed = max(card["base"] + charges_prior - paid_all, 0.0)
+    
+    raw_personal_cards.append({
+        **card,
+        "current_balance": current_live_bal,
+        "stmt_due": stmt_balance_billed,
+        "last_close": last_close,
+        "next_due": next_due,
+        "next_close": next_close
+    })
+
+# DYNAMIC AZEO SELECTOR: Pick card with live balance > 0 closest to $10.00
+non_zero_candidates = [c for c in raw_personal_cards if c["current_balance"] > 0]
+if non_zero_candidates:
+    azeo_card_name = min(non_zero_candidates, key=lambda x: abs(x["current_balance"] - 10.0))["name"]
+else:
+    azeo_card_name = "Chase 2207"
+
+live_personal_cc = []
+for c in raw_personal_cards:
+    c_name = c["name"]
+    bal = c["current_balance"]
+    stmt_due = c["stmt_due"]
+    next_due = c["next_due"]
+    next_close = c["next_close"]
     pay_by_date = next_due - timedelta(days=1)
     
-    is_azeo = (c_name == azeo_selected_card_name)
+    is_azeo = (c_name == azeo_card_name)
     
-    card_dict = dict(card)
+    # Status & Action phrasing logic
+    if stmt_due > 0.01:
+        badge_html = '<span class="badge-warn">⚠️ STMT DUE</span>'
+        action_text = f"Pay ${stmt_due:.2f} statement balance by {next_due.strftime('%b %d')}"
+    elif is_azeo:
+        badge_html = '<span class="badge-opt">✅ AZEO ACTIVE (~1%)</span>'
+        action_text = f"Leave ${bal:.2f} to report on {next_close.strftime('%b %d')}"
+    elif bal > 0.01:
+        badge_html = '<span class="badge-warn">⚠️ PAY BEFORE CLOSE</span>'
+        action_text = f"Pay ${bal:.2f} by {next_close.strftime('%b %d')} to report $0"
+    else:
+        badge_html = '<span class="badge-opt">✅ $0 REPORTING</span>'
+        action_text = f"Reports $0 on {next_close.strftime('%b %d')}"
+        
+    card_dict = dict(c)
     card_dict["is_azeo_active"] = is_azeo
-    card_dict["utilization"] = (current_bal / card["limit"]) * 100 if card["limit"] > 0 else 0.0
+    card_dict["utilization"] = (bal / c["limit"]) * 100 if c["limit"] > 0 else 0.0
     card_dict["due_str"] = next_due.strftime("%b %d")
     card_dict["close_str"] = next_close.strftime("%b %d")
-    card_dict["pay_by_str"] = f"By {pay_by_date.strftime('%b %d')}"
-    
-    if is_azeo:
-        card_dict["target"] = "~$10.00 (1%)"
-    else:
-        card_dict["target"] = "$0.00"
-        
+    card_dict["action_text"] = action_text
+    card_dict["badge_html"] = badge_html
     live_personal_cc.append(card_dict)
 
-# Build live business CC list with rolling dates
+# Business CC calculation
 live_biz_cc = []
 for card in biz_cc_definitions:
     c_name = card["name"]
@@ -319,13 +355,11 @@ for card in biz_cc_definitions:
     
     next_due = get_next_recurring_date(card["due_day"], today_dt)
     next_close = get_next_recurring_date(card["close_day"], today_dt)
-    pay_by_date = next_due - timedelta(days=1)
     
     card_dict = dict(card)
     card_dict["current_balance"] = current_bal
     card_dict["due_str"] = next_due.strftime("%b %d")
     card_dict["close_str"] = next_close.strftime("%b %d")
-    card_dict["pay_by_str"] = f"By {pay_by_date.strftime('%b %d')}"
     live_biz_cc.append(card_dict)
 
 personal_cc_debt = sum(c["current_balance"] for c in live_personal_cc)
@@ -351,7 +385,7 @@ def get_gemini_api_key():
     return None
 
 @st.cache_data(ttl=300, show_spinner=False)
-def fetch_ai_insights_cached(net_cash, tot_cash, p_debt, b_debt, p_util, azeo_card, active_unpaid_cards):
+def fetch_ai_insights_cached(net_cash, tot_cash, p_debt, b_debt, p_util, azeo_card, unpaid_stmt_cards):
     try:
         api_key = get_gemini_api_key()
         if api_key:
@@ -363,14 +397,14 @@ def fetch_ai_insights_cached(net_cash, tot_cash, p_debt, b_debt, p_util, azeo_ca
             - Net Liquid Cash is ${net_cash:,.2f} (Total Cash: ${tot_cash:,.2f}, Personal CC Debt: ${p_debt:,.2f}, Biz Debt: ${b_debt:,.2f}).
             - Personal Credit Util: {p_util:.2f}%.
             - Active AZEO Card: {azeo_card} (maintain at ~$10 for optimal credit reporting).
-            - Unpaid Cards needing payoff before next statement close: {active_unpaid_cards if active_unpaid_cards else 'None, all other cards are reporting $0'}.
-            Do NOT mention past dates or outdated deadlines. Keep it punchy, practical, and under 35 words total.
+            - Cards with unpaid statement balances: {unpaid_stmt_cards if unpaid_stmt_cards else 'None, all statement balances are paid'}.
+            Keep it punchy, practical, and under 35 words total.
             """
             response = model.generate_content(prompt)
             return response.text.replace("$", r"\$")
     except Exception:
         pass
-    return f"💡 **Executive Snapshot:** Net liquid cash stands at \\${net_cash:,.2f} with credit utilization optimized at {p_util:.2f}%. Maintain {azeo_card} at ~\\$10 for your AZEO boost while keeping all other cards at \\$0."
+    return f"💡 **Executive Snapshot:** Net liquid cash stands at \\${net_cash:,.2f} with credit utilization optimized at {p_util:.2f}%. Maintain {azeo_card} at ~\\$10 for your AZEO boost while clearing any non-AZEO cards to \\$0."
 
 # ==========================================
 # 5. APP TABS & INSTANT UI RENDERING
@@ -467,7 +501,7 @@ with tabs[0]:
             selected_acc = st.selectbox("Card / Account", account_dropdown, index=default_idx, key="f_exp_acc")
             selected_cat = st.selectbox("Category", categories_list, key="f_exp_cat")
             vendor = st.text_input("Merchant / Store", placeholder="e.g. Amazon, Shell, Trader Joe's", key="f_exp_ven")
-            item_desc = st.text_input("Item Description / What was bought? (Optional)", placeholder="e.g. Phone case, Air filter, Work lunch", key="f_exp_item")
+            item_desc = st.text_input("Item Description (Optional)", placeholder="e.g. Phone case, Work lunch", key="f_exp_item")
             entry_date = st.date_input("Date", value=datetime.today(), key="f_exp_date")
             goal_tag = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"], key="f_exp_gt")
             
@@ -490,7 +524,7 @@ with tabs[0]:
                 ]
                 try:
                     append_tx_to_sheet(new_row_values)
-                    st.success(f"✅ Successfully written to Google Sheets: ${amt:.2f} to {selected_cat} on {clean_acc}!")
+                    st.success(f"✅ Successfully written: ${amt:.2f} to {selected_cat} on {clean_acc}!")
                     st.rerun()
                 except Exception as err:
                     st.error(f"❌ Write Error: {str(err)}\n{traceback.format_exc()}")
@@ -501,7 +535,7 @@ with tabs[0]:
             inc_acc = st.selectbox("Deposit Into", ["BofA 5522 (Checking)", "SECU 4987 (Savings / Home Fund)"], key="f_inc_acc")
             inc_cat = st.selectbox("Income Source", ["W2 Salary", "Uber Income", "Other Income"], key="f_inc_cat")
             inc_desc = st.text_input("Payer / Source", placeholder="e.g. Employer Payroll, Uber Payout", key="f_inc_desc")
-            inc_item = st.text_input("Income Memo / Details (Optional)", placeholder="e.g. Pay period 8/1-8/15, Weekend boost", key="f_inc_item")
+            inc_item = st.text_input("Income Memo (Optional)", placeholder="e.g. Weekend boost", key="f_inc_item")
             inc_date = st.date_input("Date", value=datetime.today(), key="f_inc_date")
             
             if st.form_submit_button("Record Income"):
@@ -550,7 +584,7 @@ with tabs[0]:
                 key="f_pay_amt"
             )
             from_account = st.selectbox("Paid From", ["BofA 5522 (Checking)", "SECU 4987 (Savings)"], key="f_pay_from")
-            pay_item = st.text_input("Payment Memo (Optional)", placeholder="e.g. Statement balance payoff, AZEO adjustment", key="f_pay_item")
+            pay_item = st.text_input("Payment Memo (Optional)", placeholder="e.g. Statement balance payoff", key="f_pay_item")
             pay_date = st.date_input("Date", value=datetime.today(), key="f_pay_date")
             
             if st.form_submit_button("Record CC Payment"):
@@ -578,7 +612,7 @@ with tabs[0]:
                     st.error(f"❌ Write Error: {str(err)}\n{traceback.format_exc()}")
 
 # ------------------------------------------
-# TAB 2: ANALYTICS & CHARTS (STACKED BLOCKS)
+# TAB 2: ANALYTICS & CHARTS
 # ------------------------------------------
 with tabs[1]:
     st.subheader("📊 Financial Analytics & Trends")
@@ -588,7 +622,7 @@ with tabs[1]:
 
     with st.expander("📅 Jump to Specific Date / Past Year", expanded=False):
         picked_date = st.date_input(
-            "Select any date to view historical analytics:",
+            "Select date to view:",
             value=st.session_state.selected_date,
             key="jump_calendar_picker"
         )
@@ -597,23 +631,16 @@ with tabs[1]:
             st.rerun()
 
     ref_date = st.session_state.selected_date
+    df_clean = df_tx.copy() if not df_tx.empty else pd.DataFrame()
 
-    df_clean = df_tx.copy() if (df_tx is not None and not df_tx.empty) else pd.DataFrame(columns=["Date", "Type", "Category", "Amount"])
-    if not df_clean.empty and "Date" in df_clean.columns:
-        df_clean["Date_DT"] = pd.to_datetime(df_clean["Date"], errors="coerce").dt.date
-        df_clean["Amount"] = pd.to_numeric(df_clean["Amount"], errors="coerce").fillna(0.0)
-    else:
-        df_clean["Date_DT"] = pd.Series(dtype="object")
-
-    # BLOCK 1: WEEKLY ANALYTICS
+    # Weekly Block
     week_start = ref_date - timedelta(days=ref_date.weekday())
     week_end = week_start + timedelta(days=6)
 
     st.markdown("### 🗓️ Weekly Analytics")
-    
     w_col1, w_col2, w_col3 = st.columns([1, 4, 1])
     with w_col1:
-        if st.button("◀", key="prev_week_btn", help="Previous Week"):
+        if st.button("◀", key="prev_week_btn"):
             st.session_state.selected_date = ref_date - timedelta(days=7)
             st.rerun()
     with w_col2:
@@ -623,12 +650,11 @@ with tabs[1]:
             unsafe_allow_html=True
         )
     with w_col3:
-        if st.button("▶", key="next_week_btn", help="Next Week"):
+        if st.button("▶", key="next_week_btn"):
             st.session_state.selected_date = ref_date + timedelta(days=7)
             st.rerun()
 
     df_week = df_clean[(df_clean["Date_DT"] >= week_start) & (df_clean["Date_DT"] <= week_end)] if not df_clean.empty else pd.DataFrame()
-
     w_income = df_week[df_week["Type"] == "Income"]["Amount"].sum() if not df_week.empty else 0.0
     w_expense = df_week[df_week["Type"] == "Expense"]["Amount"].sum() if not df_week.empty else 0.0
     w_net = w_income - w_expense
@@ -655,22 +681,18 @@ with tabs[1]:
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#CBD5E1")
         )
         st.plotly_chart(fig_week_pie, use_container_width=True)
-    else:
-        st.caption("ℹ️ No expenses recorded for this specific week.")
 
     st.divider()
 
-    # BLOCK 2: MONTHLY ANALYTICS
+    # Monthly Block
     m_year, m_month = ref_date.year, ref_date.month
     month_start = date(m_year, m_month, 1)
-    last_day_num = calendar.monthrange(m_year, m_month)[1]
-    month_end = date(m_year, m_month, last_day_num)
+    month_end = date(m_year, m_month, calendar.monthrange(m_year, m_month)[1])
 
     st.markdown("### 📆 Monthly Analytics")
-    
     m_col1, m_col2, m_col3 = st.columns([1, 4, 1])
     with m_col1:
-        if st.button("◀", key="prev_month_btn", help="Previous Month"):
+        if st.button("◀", key="prev_month_btn"):
             prev_m = m_month - 1 if m_month > 1 else 12
             prev_y = m_year if m_month > 1 else m_year - 1
             st.session_state.selected_date = date(prev_y, prev_m, 1)
@@ -682,14 +704,13 @@ with tabs[1]:
             unsafe_allow_html=True
         )
     with m_col3:
-        if st.button("▶", key="next_month_btn", help="Next Month"):
+        if st.button("▶", key="next_month_btn"):
             next_m = m_month + 1 if m_month < 12 else 1
             next_y = m_year if m_month < 12 else m_year + 1
             st.session_state.selected_date = date(next_y, next_m, 1)
             st.rerun()
 
     df_month = df_clean[(df_clean["Date_DT"] >= month_start) & (df_clean["Date_DT"] <= month_end)] if not df_clean.empty else pd.DataFrame()
-
     m_income = df_month[df_month["Type"] == "Income"]["Amount"].sum() if not df_month.empty else 0.0
     m_expense = df_month[df_month["Type"] == "Expense"]["Amount"].sum() if not df_month.empty else 0.0
     m_net = m_income - m_expense
@@ -703,41 +724,8 @@ with tabs[1]:
         m_net_color = "#38BDF8" if m_net >= 0 else "#F87171"
         st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">MONTH NET</div><div style="font-size:16px; font-weight:800; color:{m_net_color};">${m_net:,.2f}</div></div>""", unsafe_allow_html=True)
 
-    m_exp_df = df_month[df_month["Type"] == "Expense"] if not df_month.empty else pd.DataFrame()
-    if not m_exp_df.empty:
-        m_cat_summary = m_exp_df.groupby("Category")["Amount"].sum().reset_index()
-        fig_month_pie = px.pie(
-            m_cat_summary, values="Amount", names="Category", hole=0.55,
-            title=f"{month_start.strftime('%B %Y')} Full Breakdown",
-            color_discrete_sequence=px.colors.qualitative.Prism
-        )
-        fig_month_pie.update_layout(
-            margin=dict(l=10, r=10, t=35, b=10), height=280, showlegend=True,
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#CBD5E1")
-        )
-        st.plotly_chart(fig_month_pie, use_container_width=True)
-    else:
-        st.caption(f"ℹ️ No expenses recorded yet for {month_start.strftime('%B %Y')}.")
-
-    st.markdown("#### 🔍 Jump to a Week in this Month:")
-    curr_w_start = month_start - timedelta(days=month_start.weekday())
-    week_buttons = []
-    while curr_w_start <= month_end:
-        curr_w_end = curr_w_start + timedelta(days=6)
-        week_buttons.append((curr_w_start, curr_w_end))
-        curr_w_start += timedelta(days=7)
-
-    for i in range(0, len(week_buttons), 2):
-        b_cols = st.columns(2)
-        for j, (w_s, w_e) in enumerate(week_buttons[i:i+2]):
-            with b_cols[j]:
-                label = f"{w_s.strftime('%b %d')} – {w_e.strftime('%b %d')}"
-                if st.button(f"🔎 {label}", key=f"btn_w_{w_s.strftime('%Y%m%d')}"):
-                    st.session_state.selected_date = w_s
-                    st.rerun()
-
 # ------------------------------------------
-# TAB 3: ACCOUNTS & CREDIT HUB (FULL CARD UI ON TOP, EXPANDER DIRECTLY ATTACHED)
+# TAB 3: ACCOUNTS & CREDIT HUB
 # ------------------------------------------
 with tabs[2]:
     st.subheader("🏦 Cash & Checking Spread")
@@ -747,7 +735,6 @@ with tabs[2]:
         bal = acc["current_balance"]
         pct_of_total = (bal / total_cash) * 100 if total_cash > 0 else 0.0
         
-        # 1. Full Visible Card Block (Never collapsed/hidden)
         st.markdown(f"""
         <div class="card-box">
             <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -763,7 +750,6 @@ with tabs[2]:
         </div>
         """, unsafe_allow_html=True)
         
-        # 2. Seamlessly Attached Accordion Footer
         with st.expander("🔍 View Recent Activity & Quick Action", expanded=False):
             render_card_transactions(acc["name"])
             st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
@@ -774,30 +760,19 @@ with tabs[2]:
     st.divider()
 
     st.subheader("💳 Personal Credit Cards (AZEO Strategy)")
-    st.caption(f"Overall Personal Util: **{personal_utilization:.2f}%** (${personal_cc_debt:,.2f} / ${personal_cc_limit:,.2f}). Maintain **{azeo_selected_card_name}** at ~$10 and all others at $0.")
+    st.caption(f"Overall Personal Util: **{personal_utilization:.2f}%** (${personal_cc_debt:,.2f} / ${personal_cc_limit:,.2f}). Active AZEO: **{azeo_card_name}**.")
     
     for c in live_personal_cc:
         bal = c["current_balance"]
         limit = c["limit"]
         util = c["utilization"]
         
-        if c.get("is_azeo_active"):
-            badge_html = '<span class="badge-opt">✅ AZEO ACTIVE (~1%)</span>'
-            action_text = f"Leave ~{c['target']} to report on {c['close_str']}"
-        elif bal > 0:
-            badge_html = '<span class="badge-warn">⚠️ PAY TO $0</span>'
-            action_text = f"Pay ${bal:.2f} {c['pay_by_str']} (Due {c['due_str']})"
-        else:
-            badge_html = '<span class="badge-opt">✅ $0 REPORTING</span>'
-            action_text = f"Next Due: {c['due_str']} | Closes: {c['close_str']}"
-            
-        # 1. Full Visible Card Block
         st.markdown(f"""
         <div class="card-box">
             <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                 <div>
                     <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{c['name']}</span>
-                    <div style="font-size:12px; color:#64748B;">Limit: ${limit:,.0f}</div>
+                    <div style="font-size:12px; color:#64748B;">Limit: ${limit:,.0f} | Closes: {c['close_str']}</div>
                 </div>
                 <div style="text-align:right;">
                     <span style="font-weight:800; font-size:18px; color:#F8FAFC;">${bal:.2f}</span>
@@ -805,13 +780,12 @@ with tabs[2]:
                 </div>
             </div>
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-                <span style="font-size:12px; color:#CBD5E1;">{action_text}</span>
-                <div>{badge_html}</div>
+                <span style="font-size:12px; color:#CBD5E1;">{c['action_text']}</span>
+                <div>{c['badge_html']}</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
         
-        # 2. Seamlessly Attached Accordion Footer
         with st.expander("🔍 View Recent Activity & Quick Action", expanded=False):
             render_card_transactions(c["name"])
             st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
@@ -826,8 +800,6 @@ with tabs[2]:
     
     for c in live_biz_cc:
         bal = c["current_balance"]
-        
-        # 1. Full Visible Card Block
         st.markdown(f"""
         <div class="card-box">
             <div style="display:flex; justify-content:space-between; align-items:flex-start;">
@@ -840,13 +812,12 @@ with tabs[2]:
                 </div>
             </div>
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-                <span style="font-size:12px; color:#CBD5E1;">Due: {c['due_str']} | Closes: {c['close_str']} ({c['pay_by_str']})</span>
+                <span style="font-size:12px; color:#CBD5E1;">Due: {c['due_str']} | Closes: {c['close_str']}</span>
                 <div><span class="badge-biz">💼 BUSINESS</span></div>
             </div>
         </div>
         """, unsafe_allow_html=True)
         
-        # 2. Seamlessly Attached Accordion Footer
         with st.expander("🔍 View Recent Activity & Quick Action", expanded=False):
             render_card_transactions(c["name"])
             st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
@@ -924,10 +895,10 @@ with tabs[4]:
         - Business CC Debt: ${biz_cc_debt:,.2f} (Chase 0431)
         - Net Liquid Cash: ${net_liquid_cash:,.2f}
         - 1st Home Goal: $26,500 target by March 1, 2027 (${total_cash:,.2f} saved so far, ${remaining_goal:,.2f} remaining)[cite: 1].
-        - Current Dynamic AZEO Card: {azeo_selected_card_name} (leave ~$10 to report on statement close).
+        - Dynamic AZEO Card: {azeo_card_name}.
         - Recent 15 Ledger Entries: {recent_tx_summary}
 
-        Provide direct, helpful, and concise guidance. Keep it short and conversational. When mentioning money, escape dollar signs with a backslash (e.g. \\$200).
+        Provide direct, helpful, and concise guidance. When mentioning money, escape dollar signs with a backslash (e.g. \\$200).
         """
 
         with st.chat_message("assistant"):
@@ -959,10 +930,10 @@ with tabs[4]:
 # ==========================================
 # 6. ASYNC POPULATE SUMMARY PLACEHOLDER
 # ==========================================
-unpaid_cards_list = [f"{c['name']} (${c['current_balance']:.2f})" for c in live_personal_cc if not c.get('is_azeo_active') and c['current_balance'] > 0]
-unpaid_str = ", ".join(unpaid_cards_list)
+unpaid_stmt_list = [f"{c['name']} (${c['stmt_due']:.2f})" for c in live_personal_cc if c.get('stmt_due', 0) > 0.01]
+unpaid_stmt_str = ", ".join(unpaid_stmt_list)
 
 ai_insight_text = fetch_ai_insights_cached(
-    net_liquid_cash, total_cash, personal_cc_debt, biz_cc_debt, personal_utilization, azeo_selected_card_name, unpaid_str
+    net_liquid_cash, total_cash, personal_cc_debt, biz_cc_debt, personal_utilization, azeo_card_name, unpaid_stmt_str
 )
 ai_placeholder.info(ai_insight_text)
