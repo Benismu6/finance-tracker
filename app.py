@@ -278,7 +278,7 @@ biz_cc_definitions = [
     {"name": "Chase 0431", "base": 505.07, "limit": 0.00, "due_day": 1, "close_day": 7, "is_business": True}
 ]
 
-# 2. PROCESS CARDS WITH PRECISE STATEMENT VS LIVE BALANCE MATH
+# 2. PROCESS CARDS WITH DATE-AWARE STATEMENT BALANCES
 raw_personal_cards = []
 for card in personal_cc_definitions:
     c_name = card["name"]
@@ -286,12 +286,10 @@ for card in personal_cc_definitions:
     next_due = get_next_recurring_date(card["due_day"], today_dt)
     next_close = get_next_recurring_date(card["close_day"], today_dt)
     
-    # Total historical spend & payments
     spent_all = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "Expense")]["Amount"].sum()
     paid_all = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "CC Payment")]["Amount"].sum()
     current_live_bal = max(card["base"] + spent_all - paid_all, 0.0)
     
-    # Statement Balance calculation: Base + charges before last close - all payments made
     charges_prior = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "Expense") & (df_tx["Date_DT"] <= last_close)]["Amount"].sum()
     stmt_balance_billed = max(card["base"] + charges_prior - paid_all, 0.0)
     
@@ -304,7 +302,7 @@ for card in personal_cc_definitions:
         "next_close": next_close
     })
 
-# DYNAMIC AZEO SELECTOR: Pick card with live balance > 0 closest to $10.00
+# DYNAMIC AZEO SELECTOR: Pick non-zero live balance closest to $10.00
 non_zero_candidates = [c for c in raw_personal_cards if c["current_balance"] > 0]
 if non_zero_candidates:
     azeo_card_name = min(non_zero_candidates, key=lambda x: abs(x["current_balance"] - 10.0))["name"]
@@ -318,14 +316,12 @@ for c in raw_personal_cards:
     stmt_due = c["stmt_due"]
     next_due = c["next_due"]
     next_close = c["next_close"]
-    pay_by_date = next_due - timedelta(days=1)
     
     is_azeo = (c_name == azeo_card_name)
     
-    # Status & Action phrasing logic
     if stmt_due > 0.01:
         badge_html = '<span class="badge-warn">⚠️ STMT DUE</span>'
-        action_text = f"Pay ${stmt_due:.2f} statement balance by {next_due.strftime('%b %d')}"
+        action_text = f"Pay ${stmt_due:.2f} stmt balance by {next_due.strftime('%b %d')}"
     elif is_azeo:
         badge_html = '<span class="badge-opt">✅ AZEO ACTIVE (~1%)</span>'
         action_text = f"Leave ${bal:.2f} to report on {next_close.strftime('%b %d')}"
@@ -345,7 +341,6 @@ for c in raw_personal_cards:
     card_dict["badge_html"] = badge_html
     live_personal_cc.append(card_dict)
 
-# Business CC calculation
 live_biz_cc = []
 for card in biz_cc_definitions:
     c_name = card["name"]
@@ -374,8 +369,141 @@ HOME_GOAL = 26500.00
 goal_progress = min(total_cash / HOME_GOAL, 1.0)
 remaining_goal = max(HOME_GOAL - total_cash, 0.0)
 
+# Categories master list
+categories_list = [
+    "Groceries & Food", "Vehicle & Gas", "Housing & Rent", 
+    "Dining Out & Coffee", "Utilities & Phone", "Personal & Entertainment", 
+    "Subscriptions & Software", "Business Operations", "Miscellaneous / Buffer"
+]
+
 # ==========================================
-# 4. AI EXECUTIVE SUMMARY & KEY FETCHER
+# 4. DIRECT ACTION MODAL HANDLERS
+# ==========================================
+@st.dialog("Record Transaction on Credit Card")
+def open_card_action_dialog(card_name, current_balance):
+    st.markdown(f"**Card:** `{card_name}` | **Current Balance:** `${current_balance:,.2f}`")
+    action_type = st.radio("Choose Action Type:", ["💳 Log Charge / Expense", "🔄 Record CC Payment"], horizontal=True)
+    
+    if action_type == "💳 Log Charge / Expense":
+        with st.form(f"form_card_exp_{card_name}", clear_on_submit=True):
+            amt = st.number_input("Amount ($)", min_value=0.01, step=1.00, format="%.2f")
+            cat = st.selectbox("Category", categories_list)
+            vendor = st.text_input("Merchant / Store", placeholder="e.g. Amazon, Shell, Trader Joe's")
+            desc = st.text_input("Item Memo (Optional)", placeholder="e.g. Work lunch, Gas fill-up")
+            tx_date = st.date_input("Date", value=datetime.today())
+            gt = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"])
+            
+            if st.form_submit_button("Record Expense"):
+                row = [
+                    f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                    tx_date.strftime("%Y-%m-%d"),
+                    card_name,
+                    "Expense",
+                    cat,
+                    vendor,
+                    float(amt),
+                    gt,
+                    desc,
+                    "Hub Quick Entry"
+                ]
+                try:
+                    append_tx_to_sheet(row)
+                    st.success(f"✅ Saved ${amt:.2f} expense on {card_name}!")
+                    st.rerun()
+                except Exception as err:
+                    st.error(f"Error: {err}")
+    else:
+        with st.form(f"form_card_pay_{card_name}", clear_on_submit=True):
+            pay_amt = st.number_input("Payment Amount ($)", min_value=0.01, value=float(current_balance) if current_balance > 0 else 10.00, step=1.00, format="%.2f")
+            from_acc = st.selectbox("Paid From", ["BofA 5522 (Checking)", "SECU 4987 (Savings)"])
+            memo = st.text_input("Payment Memo (Optional)", placeholder="e.g. Statement payoff, AZEO adjustment")
+            tx_date = st.date_input("Date", value=datetime.today())
+            
+            if st.form_submit_button("Submit CC Payment"):
+                clean_from = from_acc.split(" (")[0]
+                row = [
+                    f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                    tx_date.strftime("%Y-%m-%d"),
+                    card_name,
+                    "CC Payment",
+                    "CC Payment",
+                    f"Paid from {clean_from}",
+                    float(pay_amt),
+                    "General Living",
+                    memo,
+                    "Hub Quick Entry"
+                ]
+                try:
+                    append_tx_to_sheet(row)
+                    st.success(f"✅ Recorded ${pay_amt:.2f} payment to {card_name}!")
+                    st.rerun()
+                except Exception as err:
+                    st.error(f"Error: {err}")
+
+@st.dialog("Record Transaction on Cash / Bank Account")
+def open_bank_action_dialog(bank_name, current_balance):
+    st.markdown(f"**Account:** `{bank_name}` | **Current Balance:** `${current_balance:,.2f}`")
+    action_type = st.radio("Choose Action Type:", ["💵 Deposit / Income", "💸 Direct Debit Expense"], horizontal=True)
+    
+    if action_type == "💵 Deposit / Income":
+        with st.form(f"form_bank_inc_{bank_name}", clear_on_submit=True):
+            inc_amt = st.number_input("Income Amount ($)", min_value=0.01, step=1.00, format="%.2f")
+            inc_src = st.selectbox("Source", ["W2 Salary", "Uber Income", "Other Income"])
+            payer = st.text_input("Payer / Store", placeholder="e.g. Employer Payroll, Uber Payout, Client")
+            memo = st.text_input("Memo (Optional)", placeholder="e.g. Direct Deposit")
+            tx_date = st.date_input("Date", value=datetime.today())
+            gt = "Baltimore 1st Home" if "SECU" in bank_name else "General Living"
+            
+            if st.form_submit_button("Record Deposit"):
+                row = [
+                    f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                    tx_date.strftime("%Y-%m-%d"),
+                    bank_name,
+                    "Income",
+                    inc_src,
+                    payer,
+                    float(inc_amt),
+                    gt,
+                    memo,
+                    "Hub Quick Entry"
+                ]
+                try:
+                    append_tx_to_sheet(row)
+                    st.success(f"✅ Deposited ${inc_amt:.2f} into {bank_name}!")
+                    st.rerun()
+                except Exception as err:
+                    st.error(f"Error: {err}")
+    else:
+        with st.form(f"form_bank_exp_{bank_name}", clear_on_submit=True):
+            exp_amt = st.number_input("Expense Amount ($)", min_value=0.01, step=1.00, format="%.2f")
+            cat = st.selectbox("Category", categories_list)
+            vendor = st.text_input("Paid To / Merchant", placeholder="e.g. Landlord, Utility Co, Venmo")
+            memo = st.text_input("Memo (Optional)", placeholder="e.g. Monthly rent, Electricity")
+            tx_date = st.date_input("Date", value=datetime.today())
+            gt = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"])
+            
+            if st.form_submit_button("Record Direct Expense"):
+                row = [
+                    f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                    tx_date.strftime("%Y-%m-%d"),
+                    bank_name,
+                    "Expense",
+                    cat,
+                    vendor,
+                    float(exp_amt),
+                    gt,
+                    memo,
+                    "Hub Quick Entry"
+                ]
+                try:
+                    append_tx_to_sheet(row)
+                    st.success(f"✅ Recorded ${exp_amt:.2f} direct expense from {bank_name}!")
+                    st.rerun()
+                except Exception as err:
+                    st.error(f"Error: {err}")
+
+# ==========================================
+# 5. AI EXECUTIVE SUMMARY & KEY FETCHER
 # ==========================================
 def get_gemini_api_key():
     if "GEMINI_API_KEY" in st.secrets:
@@ -404,14 +532,11 @@ def fetch_ai_insights_cached(net_cash, tot_cash, p_debt, b_debt, p_util, azeo_ca
             return response.text.replace("$", r"\$")
     except Exception:
         pass
-    return f"💡 **Executive Snapshot:** Net liquid cash stands at \\${net_cash:,.2f} with credit utilization optimized at {p_util:.2f}%. Maintain {azeo_card} at ~\\$10 for your AZEO boost while clearing any non-AZEO cards to \\$0."
+    return f"💡 **Executive Snapshot:** Net liquid cash stands at \\${net_cash:,.2f} with credit utilization optimized at {p_util:.2f}%. Maintain {azeo_card} at ~\\$10 for your AZEO boost while clearing non-AZEO cards to \\$0."
 
 # ==========================================
-# 5. APP TABS & INSTANT UI RENDERING
+# 6. APP TABS & UI RENDERING
 # ==========================================
-if "preset_account" not in st.session_state:
-    st.session_state.preset_account = "Chase 1993 (Primary Daily)"
-
 tabs = st.tabs(["⚡ Command Center", "📊 Analytics & Charts", "💳 Accounts & Credit Hub", "🏠 Home Goal", "💬 AI Advisor"])
 
 account_dropdown = [
@@ -482,23 +607,11 @@ with tabs[0]:
 
     st.subheader("⚡ Fast Entry")
     tab_exp, tab_inc, tab_pay = st.tabs(["💸 Expense", "💵 Income", "🔄 CC Payment"])
-    
-    categories_list = [
-        "Groceries & Food", "Vehicle & Gas", "Housing & Rent", 
-        "Dining Out & Coffee", "Utilities & Phone", "Personal & Entertainment", 
-        "Subscriptions & Software", "Business Operations", "Miscellaneous / Buffer"
-    ]
-
-    default_idx = 0
-    for i, a in enumerate(account_dropdown):
-        if st.session_state.preset_account in a:
-            default_idx = i
-            break
 
     with tab_exp:
         with st.form("log_expense_form", clear_on_submit=True):
             amt = st.number_input("Amount ($)", min_value=0.01, step=1.00, format="%.2f", key="f_exp_amt")
-            selected_acc = st.selectbox("Card / Account", account_dropdown, index=default_idx, key="f_exp_acc")
+            selected_acc = st.selectbox("Card / Account", account_dropdown, key="f_exp_acc")
             selected_cat = st.selectbox("Category", categories_list, key="f_exp_cat")
             vendor = st.text_input("Merchant / Store", placeholder="e.g. Amazon, Shell, Trader Joe's", key="f_exp_ven")
             item_desc = st.text_input("Item Description (Optional)", placeholder="e.g. Phone case, Work lunch", key="f_exp_item")
@@ -633,7 +746,6 @@ with tabs[1]:
     ref_date = st.session_state.selected_date
     df_clean = df_tx.copy() if not df_tx.empty else pd.DataFrame()
 
-    # Weekly Block
     week_start = ref_date - timedelta(days=ref_date.weekday())
     week_end = week_start + timedelta(days=6)
 
@@ -684,7 +796,6 @@ with tabs[1]:
 
     st.divider()
 
-    # Monthly Block
     m_year, m_month = ref_date.year, ref_date.month
     month_start = date(m_year, m_month, 1)
     month_end = date(m_year, m_month, calendar.monthrange(m_year, m_month)[1])
@@ -725,11 +836,11 @@ with tabs[1]:
         st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">MONTH NET</div><div style="font-size:16px; font-weight:800; color:{m_net_color};">${m_net:,.2f}</div></div>""", unsafe_allow_html=True)
 
 # ------------------------------------------
-# TAB 3: ACCOUNTS & CREDIT HUB
+# TAB 3: ACCOUNTS & CREDIT HUB (DYNAMIC MODALS)
 # ------------------------------------------
 with tabs[2]:
     st.subheader("🏦 Cash & Checking Spread")
-    st.caption("All balances update live. Click any card below to open its ledger.")
+    st.caption("All balances update live. Click any card below to open its ledger or record actions.")
     
     for acc in live_cash_registry:
         bal = acc["current_balance"]
@@ -753,9 +864,8 @@ with tabs[2]:
         with st.expander("🔍 View Recent Activity & Quick Action", expanded=False):
             render_card_transactions(acc["name"])
             st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
-            if st.button(f"➕ Record Transaction on {acc['name']}", key=f"btn_add_{acc['name']}"):
-                st.session_state.preset_account = acc["name"]
-                st.rerun()
+            if st.button(f"⚡ Manage / Record on {acc['name']}", key=f"btn_bank_{acc['name']}"):
+                open_bank_action_dialog(acc["name"], bal)
 
     st.divider()
 
@@ -789,9 +899,8 @@ with tabs[2]:
         with st.expander("🔍 View Recent Activity & Quick Action", expanded=False):
             render_card_transactions(c["name"])
             st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
-            if st.button(f"➕ Record Transaction on {c['name']}", key=f"btn_add_{c['name']}"):
-                st.session_state.preset_account = c["name"]
-                st.rerun()
+            if st.button(f"⚡ Manage / Record on {c['name']}", key=f"btn_card_{c['name']}"):
+                open_card_action_dialog(c["name"], bal)
 
     st.divider()
 
@@ -821,9 +930,8 @@ with tabs[2]:
         with st.expander("🔍 View Recent Activity & Quick Action", expanded=False):
             render_card_transactions(c["name"])
             st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
-            if st.button(f"➕ Record Transaction on {c['name']}", key=f"btn_add_{c['name']}"):
-                st.session_state.preset_account = c["name"]
-                st.rerun()
+            if st.button(f"⚡ Manage / Record on {c['name']}", key=f"btn_biz_{c['name']}"):
+                open_card_action_dialog(c["name"], bal)
 
 # ------------------------------------------
 # TAB 4: GOALS HUB
@@ -928,7 +1036,7 @@ with tabs[4]:
             st.session_state.chat_messages.append({"role": "assistant", "content": bot_reply})
 
 # ==========================================
-# 6. ASYNC POPULATE SUMMARY PLACEHOLDER
+# 7. ASYNC POPULATE SUMMARY PLACEHOLDER
 # ==========================================
 unpaid_stmt_list = [f"{c['name']} (${c['stmt_due']:.2f})" for c in live_personal_cc if c.get('stmt_due', 0) > 0.01]
 unpaid_stmt_str = ", ".join(unpaid_stmt_list)
