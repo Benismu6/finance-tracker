@@ -242,13 +242,11 @@ def get_ledger_data():
 
 df_tx = get_ledger_data()
 
-# Baseline starting points
 cash_registry_def = [
     {"name": "BofA 5522", "role": "Primary Operating Checking", "base": 251.67},
     {"name": "SECU 4987", "role": "Dedicated Home Savings / HYSA", "base": 4212.10}
 ]
 
-# 1. DYNAMIC CASH BALANCES
 live_cash_registry = []
 for acc in cash_registry_def:
     a_name = acc["name"]
@@ -264,7 +262,6 @@ for acc in cash_registry_def:
 
 total_cash = sum(c["current_balance"] for c in live_cash_registry)
 
-# Card Definitions
 personal_cc_definitions = [
     {"name": "Chase 1993", "base": 517.70, "limit": 10600.00, "due_day": 1, "close_day": 4, "is_primary": True},
     {"name": "Chase 2207", "base": 9.52, "limit": 4900.00, "due_day": 1, "close_day": 4},
@@ -278,7 +275,6 @@ biz_cc_definitions = [
     {"name": "Chase 0431", "base": 505.07, "limit": 0.00, "due_day": 1, "close_day": 7, "is_business": True}
 ]
 
-# 2. PROCESS CARDS WITH PRECISE STATEMENT VS LIVE BALANCE MATH
 raw_personal_cards = []
 for card in personal_cc_definitions:
     c_name = card["name"]
@@ -302,7 +298,6 @@ for card in personal_cc_definitions:
         "next_close": next_close
     })
 
-# DYNAMIC AZEO SELECTOR: Pick non-zero live balance closest to $10.00
 non_zero_candidates = [c for c in raw_personal_cards if c["current_balance"] > 0]
 if non_zero_candidates:
     azeo_card_name = min(non_zero_candidates, key=lambda x: abs(x["current_balance"] - 10.0))["name"]
@@ -369,7 +364,6 @@ HOME_GOAL = 26500.00
 goal_progress = min(total_cash / HOME_GOAL, 1.0)
 remaining_goal = max(HOME_GOAL - total_cash, 0.0)
 
-# Categories Master List
 categories_list = [
     "Groceries & Food", "Vehicle & Gas", "Housing & Rent", 
     "Dining Out & Coffee", "Utilities & Phone", "Personal & Entertainment", 
@@ -535,7 +529,7 @@ def fetch_ai_insights_cached(net_cash, tot_cash, p_debt, b_debt, p_util, azeo_ca
     return f"💡 **Executive Snapshot:** Net liquid cash stands at \\${net_cash:,.2f} with credit utilization optimized at {p_util:.2f}%. Maintain {azeo_card} at ~\\$10 for your AZEO boost while clearing non-AZEO cards to \\$0."
 
 # ==========================================
-# 6. APP TABS & RE-ORDERED UI RENDERING
+# 6. APP TABS & UI RENDERING
 # ==========================================
 tabs = st.tabs([
     "⚡ Command Center", 
@@ -731,7 +725,7 @@ with tabs[0]:
                     st.error(f"❌ Write Error: {str(err)}\n{traceback.format_exc()}")
 
 # ------------------------------------------
-# TAB 2: ACCOUNTS & CREDIT HUB (TAB #2)
+# TAB 2: ACCOUNTS & CREDIT HUB
 # ------------------------------------------
 with tabs[1]:
     st.subheader("🏦 Cash & Checking Spread")
@@ -829,27 +823,24 @@ with tabs[1]:
                 open_card_action_dialog(c["name"], bal)
 
 # ------------------------------------------
-# TAB 3: ANALYTICS & CHARTS (TAB #3 - FULLY SYNCED NAVIGATION)
+# TAB 3: ANALYTICS & CHARTS
 # ------------------------------------------
 with tabs[2]:
     st.subheader("📊 Financial Analytics & Trends")
 
-    # Master state initialization
-    if "selected_date" not in st.session_state:
-        st.session_state.selected_date = date.today()
-
-    def update_selected_date_from_picker():
-        st.session_state.selected_date = st.session_state.jump_calendar_picker
+    if "current_analytics_date" not in st.session_state:
+        st.session_state.current_analytics_date = date.today()
 
     with st.expander("📅 Jump to Specific Date / Past Year", expanded=False):
-        st.date_input(
+        picked_date = st.date_input(
             "Select any date to view historical analytics:",
-            value=st.session_state.selected_date,
-            key="jump_calendar_picker",
-            on_change=update_selected_date_from_picker
+            value=st.session_state.current_analytics_date
         )
+        if picked_date != st.session_state.current_analytics_date:
+            st.session_state.current_analytics_date = picked_date
+            st.rerun()
 
-    ref_date = st.session_state.selected_date
+    ref_date = st.session_state.current_analytics_date
     df_clean = df_tx.copy() if not df_tx.empty else pd.DataFrame()
 
     # BLOCK 1: WEEKLY ANALYTICS
@@ -861,9 +852,7 @@ with tabs[2]:
     w_col1, w_col2, w_col3 = st.columns([1, 4, 1])
     with w_col1:
         if st.button("◀", key="prev_week_btn", help="Previous Week"):
-            new_dt = ref_date - timedelta(days=7)
-            st.session_state.selected_date = new_dt
-            st.session_state.jump_calendar_picker = new_dt
+            st.session_state.current_analytics_date = ref_date - timedelta(days=7)
             st.rerun()
     with w_col2:
         st.markdown(
@@ -873,9 +862,7 @@ with tabs[2]:
         )
     with w_col3:
         if st.button("▶", key="next_week_btn", help="Next Week"):
-            new_dt = ref_date + timedelta(days=7)
-            st.session_state.selected_date = new_dt
-            st.session_state.jump_calendar_picker = new_dt
+            st.session_state.current_analytics_date = ref_date + timedelta(days=7)
             st.rerun()
 
     df_week = df_clean[(df_clean["Date_DT"] >= week_start) & (df_clean["Date_DT"] <= week_end)] if not df_clean.empty else pd.DataFrame()
@@ -921,9 +908,7 @@ with tabs[2]:
         if st.button("◀", key="prev_month_btn", help="Previous Month"):
             prev_m = m_month - 1 if m_month > 1 else 12
             prev_y = m_year if m_month > 1 else m_year - 1
-            new_dt = date(prev_y, prev_m, 1)
-            st.session_state.selected_date = new_dt
-            st.session_state.jump_calendar_picker = new_dt
+            st.session_state.current_analytics_date = date(prev_y, prev_m, 1)
             st.rerun()
     with m_col2:
         st.markdown(
@@ -935,9 +920,7 @@ with tabs[2]:
         if st.button("▶", key="next_month_btn", help="Next Month"):
             next_m = m_month + 1 if m_month < 12 else 1
             next_y = m_year if m_month < 12 else m_year + 1
-            new_dt = date(next_y, next_m, 1)
-            st.session_state.selected_date = new_dt
-            st.session_state.jump_calendar_picker = new_dt
+            st.session_state.current_analytics_date = date(next_y, next_m, 1)
             st.rerun()
 
     df_month = df_clean[(df_clean["Date_DT"] >= month_start) & (df_clean["Date_DT"] <= month_end)] if not df_clean.empty else pd.DataFrame()
@@ -984,8 +967,7 @@ with tabs[2]:
             with b_cols[j]:
                 label = f"{w_s.strftime('%b %d')} – {w_e.strftime('%b %d')}"
                 if st.button(f"🔎 {label}", key=f"btn_w_{w_s.strftime('%Y%m%d')}"):
-                    st.session_state.selected_date = w_s
-                    st.session_state.jump_calendar_picker = w_s
+                    st.session_state.current_analytics_date = w_s
                     st.rerun()
 
 # ------------------------------------------
