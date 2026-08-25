@@ -381,12 +381,11 @@ WEEKLY_BUDGET_TARGETS = {
 }
 WEEKLY_BUDGET_TOTAL = 300.00
 
-# Distinct Color Matrix for Categories
 CATEGORY_COLORS = {
     "Vehicle & Gas": "#3B82F6",             # Blue
     "Housing & Rent": "#8B5CF6",            # Purple
     "Groceries & Food": "#10B981",          # Emerald Green
-    "Personal & Entertainment": "#F59E0B",  # Amber/Orange
+    "Personal & Entertainment": "#F59E0B",  # Amber
     "Dining Out & Coffee": "#EC4899",       # Pink
     "Business Operations": "#06B6D4",       # Cyan
     "Subscriptions & Software": "#6366F1",  # Indigo
@@ -846,7 +845,7 @@ with tabs[1]:
                 open_card_action_dialog(c["name"], bal)
 
 # ------------------------------------------
-# TAB 3: ANALYTICS & CHARTS (NESTED SUNBURST / DUAL-LAYER BUDGET ENGINE)
+# TAB 3: ANALYTICS & CHARTS (CIRCULAR PROGRESSION DONUT CHART)
 # ------------------------------------------
 with tabs[2]:
     st.subheader("📊 Financial Analytics & Trends")
@@ -866,7 +865,7 @@ with tabs[2]:
     ref_date = st.session_state.current_analytics_date
     df_clean = df_tx.copy() if not df_tx.empty else pd.DataFrame()
 
-    # BLOCK 1: WEEKLY ANALYTICS (FIXED $300 BUDGET PIE CHART)
+    # BLOCK 1: WEEKLY ANALYTICS (CIRCULAR SWEEP DONUT)
     week_start = ref_date - timedelta(days=ref_date.weekday())
     week_end = week_start + timedelta(days=6)
 
@@ -904,84 +903,80 @@ with tabs[2]:
 
     w_exp_df = df_week[df_week["Type"] == "Expense"] if not df_week.empty else pd.DataFrame()
     
-    # BUILD WEEKLY FIXED $300 SUNBURST ENGINE
-    w_labels = []
-    w_parents = []
-    w_values = []
-    w_colors = []
-    w_hover = []
+    # BUILD WEEKLY RADIAL PROGRESSION DONUT
+    w_donut_labels = []
+    w_donut_values = []
+    w_donut_colors = []
+    w_donut_hovers = []
 
     for cat_name, budget_amt in WEEKLY_BUDGET_TARGETS.items():
         spent_amt = w_exp_df[w_exp_df["Category"] == cat_name]["Amount"].sum() if not w_exp_df.empty else 0.0
-        unspent_amt = max(budget_amt - spent_amt, 0.0)
         base_color = CATEGORY_COLORS.get(cat_name, "#3B82F6")
         
-        # 1. Level 1: Category Budget Slice (Total = Target Budget)
-        w_labels.append(f"{cat_name}")
-        w_parents.append("")
-        w_values.append(budget_amt)
-        w_colors.append(base_color)
-        w_hover.append(f"<b>{cat_name}</b><br>Budget: ${budget_amt:.2f}<br>Total Spent: ${spent_amt:.2f}")
+        # 1. Spent Segment (Colored Arc from start of category)
+        spent_slice = min(spent_amt, budget_amt)
+        if spent_slice > 0:
+            w_donut_labels.append(f"{cat_name} (Spent)")
+            w_donut_values.append(spent_slice)
+            w_donut_colors.append(base_color)
+            w_donut_hovers.append(f"<b>{cat_name}</b><br>Spent: ${spent_amt:.2f} / ${budget_amt:.2f}<br>({(spent_amt/budget_amt*100):.1f}% of allocation)")
         
-        # 2. Level 2: Spent portion (Active Color)
-        if spent_amt > 0:
-            spent_display = min(spent_amt, budget_amt)
-            w_labels.append(f"Spent: ${spent_amt:.2f}")
-            w_parents.append(f"{cat_name}")
-            w_values.append(spent_display)
-            w_colors.append(base_color)
-            w_hover.append(f"<b>{cat_name} (Spent)</b><br>${spent_amt:.2f} of ${budget_amt:.2f} limit")
-            
-        # 3. Level 2: Unspent portion (Faded/Grayed)
-        if unspent_amt > 0:
-            w_labels.append(f"Left: ${unspent_amt:.2f}")
-            w_parents.append(f"{cat_name}")
-            w_values.append(unspent_amt)
-            w_colors.append("rgba(51, 65, 85, 0.45)")
-            w_hover.append(f"<b>{cat_name} (Remaining)</b><br>${unspent_amt:.2f} available")
+        # 2. Remaining Unspent Segment (Faded Dark Placeholder)
+        unspent_slice = max(budget_amt - spent_amt, 0.0)
+        if unspent_slice > 0:
+            w_donut_labels.append(f"{cat_name} (Left)")
+            w_donut_values.append(unspent_slice)
+            w_donut_colors.append("rgba(51, 65, 85, 0.35)")
+            w_donut_hovers.append(f"<b>{cat_name}</b><br>Remaining: ${unspent_slice:.2f} of ${budget_amt:.2f} budget")
+        
+        # 3. Overspend Extension (Alert Red)
+        if spent_amt > budget_amt:
+            over_slice = spent_amt - budget_amt
+            w_donut_labels.append(f"{cat_name} (Over)")
+            w_donut_values.append(over_slice)
+            w_donut_colors.append("#EF4444")
+            w_donut_hovers.append(f"<b>{cat_name} OVER BUDGET</b><br>Over by: +${over_slice:.2f}")
 
-    # Catch expenses in categories with no base budget
-    unbudgeted_spent = 0.0
+    # Catch Unbudgeted Expenses
     if not w_exp_df.empty:
         other_exp = w_exp_df[~w_exp_df["Category"].isin(WEEKLY_BUDGET_TARGETS.keys())]
-        unbudgeted_spent = other_exp["Amount"].sum()
-        if unbudgeted_spent > 0:
-            w_labels.append("Unbudgeted / Misc")
-            w_parents.append("")
-            w_values.append(unbudgeted_spent)
-            w_colors.append("#F87171")
-            w_hover.append(f"<b>Unbudgeted Spending</b><br>${unbudgeted_spent:.2f}")
+        unbudgeted_amt = other_exp["Amount"].sum()
+        if unbudgeted_amt > 0:
+            w_donut_labels.append("Unbudgeted / Misc")
+            w_donut_values.append(unbudgeted_amt)
+            w_donut_colors.append("#F87171")
+            w_donut_hovers.append(f"<b>Unbudgeted Spending</b><br>${unbudgeted_amt:.2f}")
 
     w_rem_total = max(WEEKLY_BUDGET_TOTAL - w_expense, 0.0)
     w_diff_str = f"+${w_rem_total:,.2f} Left" if (WEEKLY_BUDGET_TOTAL - w_expense) >= 0 else f"-${abs(WEEKLY_BUDGET_TOTAL - w_expense):,.2f} Over"
+    w_center_title = f"<b>${w_expense:,.2f}</b><br><span style='font-size:11px; color:#94A3B8;'>of $300 Budget</span><br><span style='font-size:12px; color:{'#34D399' if (WEEKLY_BUDGET_TOTAL - w_expense) >= 0 else '#F87171'};'><b>{w_diff_str}</b></span>"
 
-    fig_week_sun = go.Figure(go.Sunburst(
-        labels=w_labels,
-        parents=w_parents,
-        values=w_values,
-        branchvalues="total",
-        marker=dict(colors=w_colors),
+    fig_week_donut = go.Figure(go.Pie(
+        labels=w_donut_labels,
+        values=w_donut_values,
+        hole=0.68,
+        sort=False,
+        direction='clockwise',
+        marker=dict(colors=w_donut_colors, line=dict(color='#0F172A', width=1.5)),
         hovertemplate="%{customdata}<extra></extra>",
-        customdata=w_hover,
-        insidetextorientation='auto'
+        customdata=w_donut_hovers,
+        textinfo='none'
     ))
 
-    fig_week_sun.update_layout(
-        margin=dict(l=5, r=5, t=30, b=10),
-        height=340,
+    fig_week_donut.update_layout(
+        margin=dict(l=10, r=10, t=30, b=10),
+        height=320,
+        showlegend=False,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#CBD5E1", size=11),
-        title=dict(
-            text=f"Week of {week_start.strftime('%b %d')} (Spent ${w_expense:,.2f} / $300 Budget • {w_diff_str})",
-            font=dict(size=13, color="#94A3B8")
-        )
+        font=dict(color="#CBD5E1"),
+        annotations=[dict(text=w_center_title, x=0.5, y=0.5, font_size=14, showarrow=False)]
     )
-    st.plotly_chart(fig_week_sun, use_container_width=True)
+    st.plotly_chart(fig_week_donut, use_container_width=True)
 
     st.divider()
 
-    # BLOCK 2: MONTHLY ANALYTICS (PRO-RATED BUDGET ENGINE)
+    # BLOCK 2: MONTHLY ANALYTICS (PRO-RATED RADIAL PROGRESSION DONUT)
     m_year, m_month = ref_date.year, ref_date.month
     month_start = date(m_year, m_month, 1)
     month_end = date(m_year, m_month, calendar.monthrange(m_year, m_month)[1])
@@ -1028,80 +1023,76 @@ with tabs[2]:
 
     m_exp_df = df_month[df_month["Type"] == "Expense"] if not df_month.empty else pd.DataFrame()
     
-    # BUILD MONTHLY SUNBURST ENGINE
-    m_labels = []
-    m_parents = []
-    m_values = []
-    m_colors = []
-    m_hover = []
+    # BUILD MONTHLY RADIAL PROGRESSION DONUT
+    m_donut_labels = []
+    m_donut_values = []
+    m_donut_colors = []
+    m_donut_hovers = []
 
     for cat_name, w_base in WEEKLY_BUDGET_TARGETS.items():
         m_cat_budget = w_base * m_multiplier
         spent_amt = m_exp_df[m_exp_df["Category"] == cat_name]["Amount"].sum() if not m_exp_df.empty else 0.0
-        unspent_amt = max(m_cat_budget - spent_amt, 0.0)
         base_color = CATEGORY_COLORS.get(cat_name, "#3B82F6")
         
-        # 1. Level 1: Category
-        m_labels.append(f"{cat_name} (M)")
-        m_parents.append("")
-        m_values.append(m_cat_budget)
-        m_colors.append(base_color)
-        m_hover.append(f"<b>{cat_name}</b><br>Monthly Budget: ${m_cat_budget:.2f}<br>Total Spent: ${spent_amt:.2f}")
+        # 1. Spent Segment
+        spent_slice = min(spent_amt, m_cat_budget)
+        if spent_slice > 0:
+            m_donut_labels.append(f"{cat_name} (Spent)")
+            m_donut_values.append(spent_slice)
+            m_donut_colors.append(base_color)
+            m_donut_hovers.append(f"<b>{cat_name}</b><br>Spent: ${spent_amt:.2f} / ${m_cat_budget:.2f}<br>({(spent_amt/m_cat_budget*100):.1f}% of month budget)")
         
-        # 2. Level 2: Spent portion
-        if spent_amt > 0:
-            spent_display = min(spent_amt, m_cat_budget)
-            m_labels.append(f"M-Spent: ${spent_amt:.2f} ({cat_name})")
-            m_parents.append(f"{cat_name} (M)")
-            m_values.append(spent_display)
-            m_colors.append(base_color)
-            m_hover.append(f"<b>{cat_name} (Spent)</b><br>${spent_amt:.2f} of ${m_cat_budget:.2f} budget")
-            
-        # 3. Level 2: Unspent portion
-        if unspent_amt > 0:
-            m_labels.append(f"M-Left: ${unspent_amt:.2f} ({cat_name})")
-            m_parents.append(f"{cat_name} (M)")
-            m_values.append(unspent_amt)
-            m_colors.append("rgba(51, 65, 85, 0.45)")
-            m_hover.append(f"<b>{cat_name} (Remaining)</b><br>${unspent_amt:.2f} available")
+        # 2. Remaining Unspent Segment
+        unspent_slice = max(m_cat_budget - spent_amt, 0.0)
+        if unspent_slice > 0:
+            m_donut_labels.append(f"{cat_name} (Left)")
+            m_donut_values.append(unspent_slice)
+            m_donut_colors.append("rgba(51, 65, 85, 0.35)")
+            m_donut_hovers.append(f"<b>{cat_name}</b><br>Remaining: ${unspent_slice:.2f} of ${m_cat_budget:.2f} budget")
+        
+        # 3. Overspend Extension
+        if spent_amt > m_cat_budget:
+            over_slice = spent_amt - m_cat_budget
+            m_donut_labels.append(f"{cat_name} (Over)")
+            m_donut_values.append(over_slice)
+            m_donut_colors.append("#EF4444")
+            m_donut_hovers.append(f"<b>{cat_name} OVER BUDGET</b><br>Over by: +${over_slice:.2f}")
 
-    # Catch unbudgeted monthly spend
     if not m_exp_df.empty:
-        m_other = m_exp_df[~m_exp_df["Category"].isin(WEEKLY_BUDGET_TARGETS.keys())]
-        m_unbudgeted = m_other["Amount"].sum()
-        if m_unbudgeted > 0:
-            m_labels.append("M-Unbudgeted")
-            m_parents.append("")
-            m_values.append(m_unbudgeted)
-            m_colors.append("#F87171")
-            m_hover.append(f"<b>Unbudgeted Spending</b><br>${m_unbudgeted:.2f}")
+        other_exp = m_exp_df[~m_exp_df["Category"].isin(WEEKLY_BUDGET_TARGETS.keys())]
+        unbudgeted_amt = other_exp["Amount"].sum()
+        if unbudgeted_amt > 0:
+            m_donut_labels.append("Unbudgeted / Misc")
+            m_donut_values.append(unbudgeted_amt)
+            m_donut_colors.append("#F87171")
+            m_donut_hovers.append(f"<b>Unbudgeted Spending</b><br>${unbudgeted_amt:.2f}")
 
     m_rem_total = max(monthly_budget_target - m_expense, 0.0)
     m_diff_str = f"+${m_rem_total:,.2f} Left" if (monthly_budget_target - m_expense) >= 0 else f"-${abs(monthly_budget_target - m_expense):,.2f} Over"
+    m_center_title = f"<b>${m_expense:,.2f}</b><br><span style='font-size:11px; color:#94A3B8;'>of ${monthly_budget_target:,.0f} Budget</span><br><span style='font-size:12px; color:{'#34D399' if (monthly_budget_target - m_expense) >= 0 else '#F87171'};'><b>{m_diff_str}</b></span>"
 
-    fig_month_sun = go.Figure(go.Sunburst(
-        labels=m_labels,
-        parents=m_parents,
-        values=m_values,
-        branchvalues="total",
-        marker=dict(colors=m_colors),
+    fig_month_donut = go.Figure(go.Pie(
+        labels=m_donut_labels,
+        values=m_donut_values,
+        hole=0.68,
+        sort=False,
+        direction='clockwise',
+        marker=dict(colors=m_donut_colors, line=dict(color='#0F172A', width=1.5)),
         hovertemplate="%{customdata}<extra></extra>",
-        customdata=m_hover,
-        insidetextorientation='auto'
+        customdata=m_donut_hovers,
+        textinfo='none'
     ))
 
-    fig_month_sun.update_layout(
-        margin=dict(l=5, r=5, t=30, b=10),
-        height=340,
+    fig_month_donut.update_layout(
+        margin=dict(l=10, r=10, t=30, b=10),
+        height=320,
+        showlegend=False,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#CBD5E1", size=11),
-        title=dict(
-            text=f"{month_start.strftime('%B %Y')} Breakdown (Spent ${m_expense:,.2f} / ${monthly_budget_target:,.0f} Budget • {m_diff_str})",
-            font=dict(size=13, color="#94A3B8")
-        )
+        font=dict(color="#CBD5E1"),
+        annotations=[dict(text=m_center_title, x=0.5, y=0.5, font_size=14, showarrow=False)]
     )
-    st.plotly_chart(fig_month_sun, use_container_width=True)
+    st.plotly_chart(fig_month_donut, use_container_width=True)
 
     st.markdown("#### 🔍 Jump to a Week in this Month:")
     curr_w_start = month_start - timedelta(days=month_start.weekday())
