@@ -954,7 +954,7 @@ with tabs[2]:
     fig_week_donut = go.Figure(go.Pie(
         labels=w_donut_labels,
         values=w_donut_values,
-        hole=0.50,
+        hole=0.55,
         sort=False,
         direction='clockwise',
         marker=dict(colors=w_donut_colors, line=dict(color='#0F172A', width=1.5)),
