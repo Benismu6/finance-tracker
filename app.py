@@ -255,7 +255,6 @@ for acc in cash_registry_def:
     cc_paid_out = df_tx[(df_tx["Type"] == "CC Payment") & (df_tx["Merchant"].str.contains(a_name, na=False))]["Amount"].sum()
     
     current_cash = acc["base"] + inc_val - exp_val - cc_paid_out
-    
     acc_dict = dict(acc)
     acc_dict["current_balance"] = max(current_cash, 0.0)
     live_cash_registry.append(acc_dict)
@@ -378,10 +377,21 @@ WEEKLY_BUDGET_TARGETS = {
     "Personal & Entertainment": 50.00,
     "Dining Out & Coffee": 30.00,
     "Business Operations": 10.00,
-    "Subscriptions & Software": 10.00,
-    "Miscellaneous / Buffer": 0.00
+    "Subscriptions & Software": 10.00
 }
 WEEKLY_BUDGET_TOTAL = 300.00
+
+# Distinct Color Matrix for Categories
+CATEGORY_COLORS = {
+    "Vehicle & Gas": "#3B82F6",             # Blue
+    "Housing & Rent": "#8B5CF6",            # Purple
+    "Groceries & Food": "#10B981",          # Emerald Green
+    "Personal & Entertainment": "#F59E0B",  # Amber/Orange
+    "Dining Out & Coffee": "#EC4899",       # Pink
+    "Business Operations": "#06B6D4",       # Cyan
+    "Subscriptions & Software": "#6366F1",  # Indigo
+    "Miscellaneous / Buffer": "#64748B"     # Slate
+}
 
 # ==========================================
 # 4. DIRECT ACTION MODAL HANDLERS
@@ -542,7 +552,7 @@ def fetch_ai_insights_cached(net_cash, tot_cash, p_debt, b_debt, p_util, azeo_ca
     return f"💡 **Executive Snapshot:** Net liquid cash stands at \\${net_cash:,.2f} with credit utilization optimized at {p_util:.2f}%. Maintain {azeo_card} at ~\\$10 for your AZEO boost while clearing non-AZEO cards to \\$0."
 
 # ==========================================
-# 6. APP TABS & RE-ORDERED UI RENDERING
+# 6. APP TABS & UI RENDERING
 # ==========================================
 tabs = st.tabs([
     "⚡ Command Center", 
@@ -608,7 +618,7 @@ with tabs[0]:
     <div class="hero-card">
         <div style="display:flex; justify-content:space-between; align-items:center;">
             <span style="font-weight:700; font-size:15px;">💵 Net Liquid Cash</span>
-            <span style="color:#93C5FD; font-size:12px; font-weight:700;">Personal Util: {personal_utilization:.2f}%</span>
+            <span style="color:#93C5FD; font-size:12px;">Personal Util: {personal_utilization:.2f}%</span>
         </div>
         <div class="metric-val">${net_liquid_cash:,.2f}</div>
         <div class="metric-sub">Total Cash: ${total_cash:,.2f} | Personal Debt: ${personal_cc_debt:,.2f} | Biz Debt: ${biz_cc_debt:,.2f}</div>
@@ -836,7 +846,7 @@ with tabs[1]:
                 open_card_action_dialog(c["name"], bal)
 
 # ------------------------------------------
-# TAB 3: ANALYTICS & CHARTS (IN-CHART EMBEDDED BUDGET TRACKER)
+# TAB 3: ANALYTICS & CHARTS (NESTED SUNBURST / DUAL-LAYER BUDGET ENGINE)
 # ------------------------------------------
 with tabs[2]:
     st.subheader("📊 Financial Analytics & Trends")
@@ -856,11 +866,11 @@ with tabs[2]:
     ref_date = st.session_state.current_analytics_date
     df_clean = df_tx.copy() if not df_tx.empty else pd.DataFrame()
 
-    # BLOCK 1: WEEKLY ANALYTICS
+    # BLOCK 1: WEEKLY ANALYTICS (FIXED $300 BUDGET PIE CHART)
     week_start = ref_date - timedelta(days=ref_date.weekday())
     week_end = week_start + timedelta(days=6)
 
-    st.markdown("### 🗓️ Weekly Analytics")
+    st.markdown("### 🗓️ Weekly Analytics ($300 Budget Cap)")
     
     w_col1, w_col2, w_col3 = st.columns([1, 4, 1])
     with w_col1:
@@ -893,50 +903,94 @@ with tabs[2]:
         st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">NET CASH</div><div style="font-size:16px; font-weight:800; color:{net_color};">${w_net:,.2f}</div></div>""", unsafe_allow_html=True)
 
     w_exp_df = df_week[df_week["Type"] == "Expense"] if not df_week.empty else pd.DataFrame()
-    if not w_exp_df.empty:
-        w_cat_summary = w_exp_df.groupby("Category")["Amount"].sum().reset_index()
-        
-        # In-chart budget metrics
-        w_budget_diff = WEEKLY_BUDGET_TOTAL - w_expense
-        w_diff_str = f"+${w_budget_diff:,.2f} Left" if w_budget_diff >= 0 else f"-${abs(w_budget_diff):,.2f} Over"
-        w_center_title = f"<b>${w_expense:,.2f}</b><br><span style='font-size:11px; color:#94A3B8;'>of $300 Budget</span><br><span style='font-size:11px; color:{'#34D399' if w_budget_diff >= 0 else '#F87171'};'><b>{w_diff_str}</b></span>"
+    
+    # BUILD WEEKLY FIXED $300 SUNBURST ENGINE
+    w_labels = []
+    w_parents = []
+    w_values = []
+    w_colors = []
+    w_hover = []
 
-        fig_week_pie = px.pie(
-            w_cat_summary, 
-            values="Amount", 
-            names="Category", 
-            hole=0.6,
-            title=f"Week of {week_start.strftime('%b %d')} Spending",
-            color_discrete_sequence=px.colors.qualitative.Pastel
+    for cat_name, budget_amt in WEEKLY_BUDGET_TARGETS.items():
+        spent_amt = w_exp_df[w_exp_df["Category"] == cat_name]["Amount"].sum() if not w_exp_df.empty else 0.0
+        unspent_amt = max(budget_amt - spent_amt, 0.0)
+        base_color = CATEGORY_COLORS.get(cat_name, "#3B82F6")
+        
+        # 1. Level 1: Category Budget Slice (Total = Target Budget)
+        w_labels.append(f"{cat_name}")
+        w_parents.append("")
+        w_values.append(budget_amt)
+        w_colors.append(base_color)
+        w_hover.append(f"<b>{cat_name}</b><br>Budget: ${budget_amt:.2f}<br>Total Spent: ${spent_amt:.2f}")
+        
+        # 2. Level 2: Spent portion (Active Color)
+        if spent_amt > 0:
+            spent_display = min(spent_amt, budget_amt)
+            w_labels.append(f"Spent: ${spent_amt:.2f}")
+            w_parents.append(f"{cat_name}")
+            w_values.append(spent_display)
+            w_colors.append(base_color)
+            w_hover.append(f"<b>{cat_name} (Spent)</b><br>${spent_amt:.2f} of ${budget_amt:.2f} limit")
+            
+        # 3. Level 2: Unspent portion (Faded/Grayed)
+        if unspent_amt > 0:
+            w_labels.append(f"Left: ${unspent_amt:.2f}")
+            w_parents.append(f"{cat_name}")
+            w_values.append(unspent_amt)
+            w_colors.append("rgba(51, 65, 85, 0.45)")
+            w_hover.append(f"<b>{cat_name} (Remaining)</b><br>${unspent_amt:.2f} available")
+
+    # Catch expenses in categories with no base budget
+    unbudgeted_spent = 0.0
+    if not w_exp_df.empty:
+        other_exp = w_exp_df[~w_exp_df["Category"].isin(WEEKLY_BUDGET_TARGETS.keys())]
+        unbudgeted_spent = other_exp["Amount"].sum()
+        if unbudgeted_spent > 0:
+            w_labels.append("Unbudgeted / Misc")
+            w_parents.append("")
+            w_values.append(unbudgeted_spent)
+            w_colors.append("#F87171")
+            w_hover.append(f"<b>Unbudgeted Spending</b><br>${unbudgeted_spent:.2f}")
+
+    w_rem_total = max(WEEKLY_BUDGET_TOTAL - w_expense, 0.0)
+    w_diff_str = f"+${w_rem_total:,.2f} Left" if (WEEKLY_BUDGET_TOTAL - w_expense) >= 0 else f"-${abs(WEEKLY_BUDGET_TOTAL - w_expense):,.2f} Over"
+
+    fig_week_sun = go.Figure(go.Sunburst(
+        labels=w_labels,
+        parents=w_parents,
+        values=w_values,
+        branchvalues="total",
+        marker=dict(colors=w_colors),
+        hovertemplate="%{customdata}<extra></extra>",
+        customdata=w_hover,
+        insidetextorientation='auto'
+    ))
+
+    fig_week_sun.update_layout(
+        margin=dict(l=5, r=5, t=30, b=10),
+        height=340,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#CBD5E1", size=11),
+        title=dict(
+            text=f"Week of {week_start.strftime('%b %d')} (Spent ${w_expense:,.2f} / $300 Budget • {w_diff_str})",
+            font=dict(size=13, color="#94A3B8")
         )
-        fig_week_pie.update_traces(
-            textinfo="percent+label",
-            hovertemplate="<b>%{label}</b><br>Spent: $%{value:,.2f}<br>%{percent}<extra></extra>"
-        )
-        fig_week_pie.update_layout(
-            margin=dict(l=10, r=10, t=35, b=10),
-            height=290,
-            showlegend=False,
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#CBD5E1"),
-            annotations=[dict(text=w_center_title, x=0.5, y=0.5, font_size=14, showarrow=False)]
-        )
-        st.plotly_chart(fig_week_pie, use_container_width=True)
-    else:
-        st.caption("ℹ️ No expenses recorded for this specific week.")
+    )
+    st.plotly_chart(fig_week_sun, use_container_width=True)
 
     st.divider()
 
-    # BLOCK 2: MONTHLY ANALYTICS
+    # BLOCK 2: MONTHLY ANALYTICS (PRO-RATED BUDGET ENGINE)
     m_year, m_month = ref_date.year, ref_date.month
     month_start = date(m_year, m_month, 1)
     month_end = date(m_year, m_month, calendar.monthrange(m_year, m_month)[1])
 
     days_in_month = (month_end - month_start).days + 1
-    monthly_budget_target = (days_in_month / 7.0) * WEEKLY_BUDGET_TOTAL
+    m_multiplier = days_in_month / 7.0
+    monthly_budget_target = m_multiplier * WEEKLY_BUDGET_TOTAL
 
-    st.markdown("### 📆 Monthly Analytics")
+    st.markdown(f"### 📆 Monthly Analytics ({month_start.strftime('%B %Y')})")
     
     m_col1, m_col2, m_col3 = st.columns([1, 4, 1])
     with m_col1:
@@ -973,37 +1027,81 @@ with tabs[2]:
         st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">MONTH NET</div><div style="font-size:16px; font-weight:800; color:{m_net_color};">${m_net:,.2f}</div></div>""", unsafe_allow_html=True)
 
     m_exp_df = df_month[df_month["Type"] == "Expense"] if not df_month.empty else pd.DataFrame()
-    if not m_exp_df.empty:
-        m_cat_summary = m_exp_df.groupby("Category")["Amount"].sum().reset_index()
-        
-        m_budget_diff = monthly_budget_target - m_expense
-        m_diff_str = f"+${m_budget_diff:,.2f} Left" if m_budget_diff >= 0 else f"-${abs(m_budget_diff):,.2f} Over"
-        m_center_title = f"<b>${m_expense:,.2f}</b><br><span style='font-size:11px; color:#94A3B8;'>of ${monthly_budget_target:,.0f} Budget</span><br><span style='font-size:11px; color:{'#34D399' if m_budget_diff >= 0 else '#F87171'};'><b>{m_diff_str}</b></span>"
+    
+    # BUILD MONTHLY SUNBURST ENGINE
+    m_labels = []
+    m_parents = []
+    m_values = []
+    m_colors = []
+    m_hover = []
 
-        fig_month_pie = px.pie(
-            m_cat_summary, 
-            values="Amount", 
-            names="Category", 
-            hole=0.6,
-            title=f"{month_start.strftime('%B %Y')} Full Breakdown",
-            color_discrete_sequence=px.colors.qualitative.Prism
+    for cat_name, w_base in WEEKLY_BUDGET_TARGETS.items():
+        m_cat_budget = w_base * m_multiplier
+        spent_amt = m_exp_df[m_exp_df["Category"] == cat_name]["Amount"].sum() if not m_exp_df.empty else 0.0
+        unspent_amt = max(m_cat_budget - spent_amt, 0.0)
+        base_color = CATEGORY_COLORS.get(cat_name, "#3B82F6")
+        
+        # 1. Level 1: Category
+        m_labels.append(f"{cat_name} (M)")
+        m_parents.append("")
+        m_values.append(m_cat_budget)
+        m_colors.append(base_color)
+        m_hover.append(f"<b>{cat_name}</b><br>Monthly Budget: ${m_cat_budget:.2f}<br>Total Spent: ${spent_amt:.2f}")
+        
+        # 2. Level 2: Spent portion
+        if spent_amt > 0:
+            spent_display = min(spent_amt, m_cat_budget)
+            m_labels.append(f"M-Spent: ${spent_amt:.2f} ({cat_name})")
+            m_parents.append(f"{cat_name} (M)")
+            m_values.append(spent_display)
+            m_colors.append(base_color)
+            m_hover.append(f"<b>{cat_name} (Spent)</b><br>${spent_amt:.2f} of ${m_cat_budget:.2f} budget")
+            
+        # 3. Level 2: Unspent portion
+        if unspent_amt > 0:
+            m_labels.append(f"M-Left: ${unspent_amt:.2f} ({cat_name})")
+            m_parents.append(f"{cat_name} (M)")
+            m_values.append(unspent_amt)
+            m_colors.append("rgba(51, 65, 85, 0.45)")
+            m_hover.append(f"<b>{cat_name} (Remaining)</b><br>${unspent_amt:.2f} available")
+
+    # Catch unbudgeted monthly spend
+    if not m_exp_df.empty:
+        m_other = m_exp_df[~m_exp_df["Category"].isin(WEEKLY_BUDGET_TARGETS.keys())]
+        m_unbudgeted = m_other["Amount"].sum()
+        if m_unbudgeted > 0:
+            m_labels.append("M-Unbudgeted")
+            m_parents.append("")
+            m_values.append(m_unbudgeted)
+            m_colors.append("#F87171")
+            m_hover.append(f"<b>Unbudgeted Spending</b><br>${m_unbudgeted:.2f}")
+
+    m_rem_total = max(monthly_budget_target - m_expense, 0.0)
+    m_diff_str = f"+${m_rem_total:,.2f} Left" if (monthly_budget_target - m_expense) >= 0 else f"-${abs(monthly_budget_target - m_expense):,.2f} Over"
+
+    fig_month_sun = go.Figure(go.Sunburst(
+        labels=m_labels,
+        parents=m_parents,
+        values=m_values,
+        branchvalues="total",
+        marker=dict(colors=m_colors),
+        hovertemplate="%{customdata}<extra></extra>",
+        customdata=m_hover,
+        insidetextorientation='auto'
+    ))
+
+    fig_month_sun.update_layout(
+        margin=dict(l=5, r=5, t=30, b=10),
+        height=340,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#CBD5E1", size=11),
+        title=dict(
+            text=f"{month_start.strftime('%B %Y')} Breakdown (Spent ${m_expense:,.2f} / ${monthly_budget_target:,.0f} Budget • {m_diff_str})",
+            font=dict(size=13, color="#94A3B8")
         )
-        fig_month_pie.update_traces(
-            textinfo="percent+label",
-            hovertemplate="<b>%{label}</b><br>Spent: $%{value:,.2f}<br>%{percent}<extra></extra>"
-        )
-        fig_month_pie.update_layout(
-            margin=dict(l=10, r=10, t=35, b=10),
-            height=300,
-            showlegend=False,
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#CBD5E1"),
-            annotations=[dict(text=m_center_title, x=0.5, y=0.5, font_size=14, showarrow=False)]
-        )
-        st.plotly_chart(fig_month_pie, use_container_width=True)
-    else:
-        st.caption(f"ℹ️ No expenses recorded yet for {month_start.strftime('%B %Y')}.")
+    )
+    st.plotly_chart(fig_month_sun, use_container_width=True)
 
     st.markdown("#### 🔍 Jump to a Week in this Month:")
     curr_w_start = month_start - timedelta(days=month_start.weekday())
