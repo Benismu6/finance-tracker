@@ -100,9 +100,9 @@ st.markdown("""
     
     .stButton>button {
         width: 100%;
-        border-radius: 12px;
-        height: 44px;
-        font-size: 15px;
+        border-radius: 10px;
+        height: 40px;
+        font-size: 14px;
         font-weight: 700;
         background-color: #2563EB;
         color: white;
@@ -110,12 +110,36 @@ st.markdown("""
         box-shadow: 0 2px 6px rgba(37,99,235,0.4);
     }
     
-    /* Styled Expander Cards */
-    .streamlit-expanderHeader {
-        background-color: #1E293B !important;
+    /* Original Card Container Styling */
+    .card-box {
+        background-color: #1E293B;
+        border-radius: 10px;
+        padding: 12px 14px;
+        border: 1px solid #334155;
+        margin-bottom: 4px;
+    }
+
+    /* Seamless Nested Expander Styling */
+    div[data-testid="stExpander"] {
+        border: none !important;
+        box-shadow: none !important;
+        background-color: transparent !important;
+        margin-bottom: 10px !important;
+    }
+    div[data-testid="stExpander"] summary {
+        background-color: #0F172A !important;
+        border-radius: 8px !important;
+        padding: 6px 12px !important;
+        font-size: 12px !important;
+        color: #93C5FD !important;
+        border: 1px dashed #334155 !important;
+    }
+    div[data-testid="stExpander"] div[role="region"] {
+        background-color: #162032 !important;
         border: 1px solid #334155 !important;
-        border-radius: 10px !important;
-        padding: 10px 14px !important;
+        border-radius: 8px !important;
+        padding: 10px !important;
+        margin-top: 4px !important;
     }
     
     .badge-opt { background-color: #065F46; color: #6EE7B7; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
@@ -313,7 +337,6 @@ def fetch_ai_insights_cached(net_cash, tot_cash, p_debt, b_debt, p_util, p_lim):
 # ==========================================
 # 5. APP TABS & INSTANT UI RENDERING
 # ==========================================
-# Session state router for fast pre-selection from Hub tab
 if "preset_account" not in st.session_state:
     st.session_state.preset_account = "Chase 1993 (Primary Daily)"
 
@@ -331,17 +354,15 @@ account_dropdown = [
     "SECU 4987 (Savings / Home Fund)"
 ]
 
-# Helper to render recent 5 transactions inside an account card
 def render_card_transactions(acc_name):
     if not df_tx.empty and "Account" in df_tx.columns:
-        # Match transactions logged directly or CC payments from checking
         sub_tx = df_tx[
             (df_tx["Account"] == acc_name) | 
             ((df_tx["Type"] == "CC Payment") & (df_tx["Merchant"].str.contains(acc_name, na=False)))
         ].tail(5)
         
         if not sub_tx.empty:
-            st.markdown("<div style='font-size:12px; font-weight:700; color:#94A3B8; margin-top:6px; margin-bottom:4px;'>Last 5 Transactions:</div>", unsafe_allow_html=True)
+            st.markdown("<div style='font-size:12px; font-weight:700; color:#94A3B8; margin-top:4px; margin-bottom:4px;'>Last 5 Transactions:</div>", unsafe_allow_html=True)
             for _, r in sub_tx.iloc[::-1].iterrows():
                 t_type = r.get("Type", "Expense")
                 amt = float(r.get("Amount", 0.0))
@@ -396,7 +417,6 @@ with tabs[0]:
         "Subscriptions & Software", "Business Operations", "Miscellaneous / Buffer"
     ]
 
-    # Pre-select matching index if routed from the Hub
     default_idx = 0
     for i, a in enumerate(account_dropdown):
         if st.session_state.preset_account in a:
@@ -679,22 +699,37 @@ with tabs[1]:
                     st.rerun()
 
 # ------------------------------------------
-# TAB 3: ACCOUNTS & CREDIT HUB (EXPANDABLE)
+# TAB 3: ACCOUNTS & CREDIT HUB (RESTORED CARD STYLES + EXPANDERS)
 # ------------------------------------------
 with tabs[2]:
     st.subheader("🏦 Cash & Checking Spread")
-    st.caption("Click any account to view recent activity and record transactions.")
+    st.caption("How your liquid cash is distributed across checking and savings.")
     
     for acc in live_cash_registry:
         bal = acc["current_balance"]
         pct_of_total = (bal / total_cash) * 100 if total_cash > 0 else 0.0
         
-        with st.expander(f"💵 {acc['name']} — ${bal:,.2f} ({pct_of_total:.1f}% of cash)", expanded=False):
-            st.markdown(f"<div style='font-size:12px; color:#94A3B8; margin-bottom:8px;'>Role: {acc['role']}</div>", unsafe_allow_html=True)
+        # Restored Original High-Contrast Dark Card Style
+        st.markdown(f"""
+        <div class="card-box">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{acc['name']}</span>
+                    <div style="font-size:12px; color:#94A3B8;">{acc['role']}</div>
+                </div>
+                <div style="text-align:right;">
+                    <span style="font-weight:700; font-size:16px; color:#38BDF8;">${bal:,.2f}</span>
+                    <div style="font-size:11px; color:#64748B;">{pct_of_total:.1f}% of cash</div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Smooth Accordion for Details & Fast Action
+        with st.expander(f"🔍 View {acc['name']} Activity & Quick Action", expanded=False):
             render_card_transactions(acc["name"])
-            
-            st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
-            if st.button(f"➕ Record on {acc['name']}", key=f"btn_add_{acc['name']}"):
+            st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
+            if st.button(f"➕ Record Transaction on {acc['name']}", key=f"btn_add_{acc['name']}"):
                 st.session_state.preset_account = acc["name"]
                 st.rerun()
 
@@ -709,25 +744,39 @@ with tabs[2]:
         util = c["utilization"]
         
         if c.get("is_azeo_active"):
-            status_tag = "✅ AZEO (~1%)"
+            badge = '<span class="badge-opt">✅ AZEO ACTIVE (~1%)</span>'
             action = f"Leave ~{c['target']} to report on {c['close_str']}"
         elif bal > 0:
-            status_tag = "⚠️ PAY TO $0"
+            badge = '<span class="badge-warn">⚠️ PAY TO $0</span>'
             action = f"Pay ${bal:.2f} {c['pay_by_str']} (Due {c['due_str']})"
         else:
-            status_tag = "✅ $0 REPORTING"
+            badge = '<span class="badge-opt">✅ ZERO REPORTING ($0)</span>'
             action = f"Next Due: {c['due_str']} | Closes: {c['close_str']}"
             
-        with st.expander(f"💳 {c['name']} — ${bal:,.2f} ({util:.1f}% util) | {status_tag}", expanded=False):
-            st.markdown(f"""
-            <div style="display:flex; justify-content:space-between; font-size:12px; color:#CBD5E1; margin-bottom:6px;">
-                <span><b>Limit:</b> ${limit:,.0f}</span>
-                <span><b>Action:</b> {action}</span>
+        # Restored Original High-Contrast Dark Card Style
+        st.markdown(f"""
+        <div class="card-box">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{c['name']}</span>
+                    <span style="font-size:12px; color:#64748B; margin-left:6px;">Limit: ${limit:,.0f}</span>
+                </div>
+                <div style="text-align:right;">
+                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">${bal:.2f}</span>
+                    <span style="font-size:11px; color:#94A3B8; margin-left:4px;">({util:.1f}%)</span>
+                </div>
             </div>
-            """, unsafe_allow_html=True)
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+                <span style="font-size:12px; color:#CBD5E1;">{action}</span>
+                <div>{badge}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Smooth Accordion for Details & Fast Action
+        with st.expander(f"🔍 View {c['name']} Activity & Quick Action", expanded=False):
             render_card_transactions(c["name"])
-            
-            st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
             if st.button(f"➕ Record Transaction on {c['name']}", key=f"btn_add_{c['name']}"):
                 st.session_state.preset_account = c["name"]
                 st.rerun()
@@ -738,12 +787,29 @@ with tabs[2]:
     st.caption("Business cards do not report to your personal credit score.")
     
     for c in live_biz_cc:
-        bal = c["current_balance"]
-        with st.expander(f"💼 {c['name']} — ${bal:,.2f} balance", expanded=False):
-            st.markdown(f"<div style='font-size:12px; color:#CBD5E1; margin-bottom:6px;'><b>Due:</b> {c['due_str']} | <b>Closes:</b> {c['close_str']} ({c['pay_by_str']})</div>", unsafe_allow_html=True)
+        # Restored Original High-Contrast Dark Card Style
+        st.markdown(f"""
+        <div class="card-box">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{c['name']}</span>
+                    <span style="font-size:12px; color:#64748B; margin-left:6px;">Business Card</span>
+                </div>
+                <div style="text-align:right;">
+                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">${c['current_balance']:.2f}</span>
+                </div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+                <span style="font-size:12px; color:#CBD5E1;">Due: {c['due_str']} | Closes: {c['close_str']} ({c['pay_by_str']})</span>
+                <div><span class="badge-biz">💼 BUSINESS</span></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Smooth Accordion for Details & Fast Action
+        with st.expander(f"🔍 View {c['name']} Activity & Quick Action", expanded=False):
             render_card_transactions(c["name"])
-            
-            st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
             if st.button(f"➕ Record Transaction on {c['name']}", key=f"btn_add_{c['name']}"):
                 st.session_state.preset_account = c["name"]
                 st.rerun()
