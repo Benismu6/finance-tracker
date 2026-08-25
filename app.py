@@ -101,13 +101,21 @@ st.markdown("""
     .stButton>button {
         width: 100%;
         border-radius: 12px;
-        height: 48px;
-        font-size: 16px;
+        height: 44px;
+        font-size: 15px;
         font-weight: 700;
         background-color: #2563EB;
         color: white;
         border: none;
         box-shadow: 0 2px 6px rgba(37,99,235,0.4);
+    }
+    
+    /* Styled Expander Cards */
+    .streamlit-expanderHeader {
+        background-color: #1E293B !important;
+        border: 1px solid #334155 !important;
+        border-radius: 10px !important;
+        padding: 10px 14px !important;
     }
     
     .badge-opt { background-color: #065F46; color: #6EE7B7; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
@@ -305,7 +313,61 @@ def fetch_ai_insights_cached(net_cash, tot_cash, p_debt, b_debt, p_util, p_lim):
 # ==========================================
 # 5. APP TABS & INSTANT UI RENDERING
 # ==========================================
+# Session state router for fast pre-selection from Hub tab
+if "preset_account" not in st.session_state:
+    st.session_state.preset_account = "Chase 1993 (Primary Daily)"
+
 tabs = st.tabs(["⚡ Command Center", "📊 Analytics & Charts", "💳 Accounts & Credit Hub", "🏠 Home Goal", "💬 AI Advisor"])
+
+account_dropdown = [
+    "Chase 1993 (Primary Daily)",
+    "Chase 0431 (Business CC)",
+    "Chase 2207 (AZEO 1%)",
+    "BofA 5309",
+    "BofA 7197",
+    "Apple 1765",
+    "TJX",
+    "BofA 5522 (Checking)",
+    "SECU 4987 (Savings / Home Fund)"
+]
+
+# Helper to render recent 5 transactions inside an account card
+def render_card_transactions(acc_name):
+    if not df_tx.empty and "Account" in df_tx.columns:
+        # Match transactions logged directly or CC payments from checking
+        sub_tx = df_tx[
+            (df_tx["Account"] == acc_name) | 
+            ((df_tx["Type"] == "CC Payment") & (df_tx["Merchant"].str.contains(acc_name, na=False)))
+        ].tail(5)
+        
+        if not sub_tx.empty:
+            st.markdown("<div style='font-size:12px; font-weight:700; color:#94A3B8; margin-top:6px; margin-bottom:4px;'>Last 5 Transactions:</div>", unsafe_allow_html=True)
+            for _, r in sub_tx.iloc[::-1].iterrows():
+                t_type = r.get("Type", "Expense")
+                amt = float(r.get("Amount", 0.0))
+                desc = r.get("Item_Description", "")
+                vendor = r.get("Merchant", "")
+                date_val = str(r.get("Date", ""))
+                
+                label = f"{vendor} — {desc}" if desc and str(desc).strip() != "" and str(desc).lower() != "nan" else vendor
+                amt_color = "#34D399" if t_type == "Income" else ("#60A5FA" if t_type == "CC Payment" else "#F87171")
+                prefix = "+" if t_type == "Income" else "-"
+                
+                st.markdown(f"""
+                <div style="display:flex; justify-content:space-between; align-items:center; background:#0F172A; border-radius:6px; padding:6px 10px; margin-bottom:4px; font-size:12px; border:1px solid #334155;">
+                    <div>
+                        <span style="color:#CBD5E1; font-weight:600;">{label}</span>
+                        <div style="font-size:10px; color:#64748B;">{date_val} • {t_type}</div>
+                    </div>
+                    <div style="font-weight:700; color:{amt_color}; font-size:13px;">
+                        {prefix}${amt:,.2f}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.caption("ℹ️ No transactions recorded for this account yet.")
+    else:
+        st.caption("ℹ️ No ledger records available.")
 
 # ------------------------------------------
 # TAB 1: COMMAND CENTER
@@ -322,24 +384,11 @@ with tabs[0]:
     </div>
     """, unsafe_allow_html=True)
     
-    # Non-blocking AI Summary Container Placeholder
     ai_placeholder = st.empty()
     ai_placeholder.caption("✨ *Fetching personalized AI insights...*")
 
     st.subheader("⚡ Fast Entry")
     tab_exp, tab_inc, tab_pay = st.tabs(["💸 Expense", "💵 Income", "🔄 CC Payment"])
-    
-    account_dropdown = [
-        "Chase 1993 (Primary Daily)",
-        "Chase 0431 (Business CC)",
-        "Chase 2207 (AZEO 1%)",
-        "BofA 5309",
-        "BofA 7197",
-        "Apple 1765",
-        "TJX",
-        "BofA 5522 (Checking)",
-        "SECU 4987 (Savings / Home Fund)"
-    ]
     
     categories_list = [
         "Groceries & Food", "Vehicle & Gas", "Housing & Rent", 
@@ -347,10 +396,17 @@ with tabs[0]:
         "Subscriptions & Software", "Business Operations", "Miscellaneous / Buffer"
     ]
 
+    # Pre-select matching index if routed from the Hub
+    default_idx = 0
+    for i, a in enumerate(account_dropdown):
+        if st.session_state.preset_account in a:
+            default_idx = i
+            break
+
     with tab_exp:
         with st.form("log_expense_form", clear_on_submit=True):
             amt = st.number_input("Amount ($)", min_value=0.01, step=1.00, format="%.2f", key="f_exp_amt")
-            selected_acc = st.selectbox("Card / Account", account_dropdown, index=0, key="f_exp_acc")
+            selected_acc = st.selectbox("Card / Account", account_dropdown, index=default_idx, key="f_exp_acc")
             selected_cat = st.selectbox("Category", categories_list, key="f_exp_cat")
             vendor = st.text_input("Merchant / Store", placeholder="e.g. Amazon, Shell, Trader Joe's", key="f_exp_ven")
             item_desc = st.text_input("Item Description / What was bought? (Optional)", placeholder="e.g. Phone case, Air filter, Work lunch", key="f_exp_item")
@@ -623,29 +679,24 @@ with tabs[1]:
                     st.rerun()
 
 # ------------------------------------------
-# TAB 3: ACCOUNTS & CREDIT HUB
+# TAB 3: ACCOUNTS & CREDIT HUB (EXPANDABLE)
 # ------------------------------------------
 with tabs[2]:
     st.subheader("🏦 Cash & Checking Spread")
-    st.caption("How your liquid cash is distributed across checking and savings.")
+    st.caption("Click any account to view recent activity and record transactions.")
     
     for acc in live_cash_registry:
         bal = acc["current_balance"]
         pct_of_total = (bal / total_cash) * 100 if total_cash > 0 else 0.0
-        st.markdown(f"""
-        <div style="background:#1E293B; border-radius:10px; padding:12px 14px; margin-bottom:8px; border:1px solid #334155;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{acc['name']}</span>
-                    <div style="font-size:12px; color:#94A3B8;">{acc['role']}</div>
-                </div>
-                <div style="text-align:right;">
-                    <span style="font-weight:700; font-size:16px; color:#38BDF8;">${bal:,.2f}</span>
-                    <div style="font-size:11px; color:#64748B;">{pct_of_total:.1f}% of cash</div>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        
+        with st.expander(f"💵 {acc['name']} — ${bal:,.2f} ({pct_of_total:.1f}% of cash)", expanded=False):
+            st.markdown(f"<div style='font-size:12px; color:#94A3B8; margin-bottom:8px;'>Role: {acc['role']}</div>", unsafe_allow_html=True)
+            render_card_transactions(acc["name"])
+            
+            st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+            if st.button(f"➕ Record on {acc['name']}", key=f"btn_add_{acc['name']}"):
+                st.session_state.preset_account = acc["name"]
+                st.rerun()
 
     st.divider()
 
@@ -658,33 +709,28 @@ with tabs[2]:
         util = c["utilization"]
         
         if c.get("is_azeo_active"):
-            badge = '<span class="badge-opt">✅ AZEO ACTIVE (~1%)</span>'
+            status_tag = "✅ AZEO (~1%)"
             action = f"Leave ~{c['target']} to report on {c['close_str']}"
         elif bal > 0:
-            badge = '<span class="badge-warn">⚠️ PAY TO $0</span>'
+            status_tag = "⚠️ PAY TO $0"
             action = f"Pay ${bal:.2f} {c['pay_by_str']} (Due {c['due_str']})"
         else:
-            badge = '<span class="badge-opt">✅ ZERO REPORTING ($0)</span>'
+            status_tag = "✅ $0 REPORTING"
             action = f"Next Due: {c['due_str']} | Closes: {c['close_str']}"
             
-        st.markdown(f"""
-        <div style="background:#1E293B; border-radius:10px; padding:12px 14px; margin-bottom:8px; border:1px solid #334155;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{c['name']}</span>
-                    <span style="font-size:12px; color:#64748B; margin-left:6px;">Limit: ${limit:,.0f}</span>
-                </div>
-                <div style="text-align:right;">
-                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">${bal:.2f}</span>
-                    <span style="font-size:11px; color:#94A3B8; margin-left:4px;">({util:.1f}%)</span>
-                </div>
+        with st.expander(f"💳 {c['name']} — ${bal:,.2f} ({util:.1f}% util) | {status_tag}", expanded=False):
+            st.markdown(f"""
+            <div style="display:flex; justify-content:space-between; font-size:12px; color:#CBD5E1; margin-bottom:6px;">
+                <span><b>Limit:</b> ${limit:,.0f}</span>
+                <span><b>Action:</b> {action}</span>
             </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
-                <span style="font-size:12px; color:#CBD5E1;">{action}</span>
-                <div>{badge}</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
+            render_card_transactions(c["name"])
+            
+            st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+            if st.button(f"➕ Record Transaction on {c['name']}", key=f"btn_add_{c['name']}"):
+                st.session_state.preset_account = c["name"]
+                st.rerun()
 
     st.divider()
 
@@ -692,23 +738,15 @@ with tabs[2]:
     st.caption("Business cards do not report to your personal credit score.")
     
     for c in live_biz_cc:
-        st.markdown(f"""
-        <div style="background:#1E293B; border-radius:10px; padding:12px 14px; margin-bottom:8px; border:1px solid #334155;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{c['name']}</span>
-                    <span style="font-size:12px; color:#64748B; margin-left:6px;">Business Card</span>
-                </div>
-                <div style="text-align:right;">
-                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">${c['current_balance']:.2f}</span>
-                </div>
-            </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
-                <span style="font-size:12px; color:#CBD5E1;">Due: {c['due_str']} | Closes: {c['close_str']} ({c['pay_by_str']})</span>
-                <div><span class="badge-biz">💼 BUSINESS</span></div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        bal = c["current_balance"]
+        with st.expander(f"💼 {c['name']} — ${bal:,.2f} balance", expanded=False):
+            st.markdown(f"<div style='font-size:12px; color:#CBD5E1; margin-bottom:6px;'><b>Due:</b> {c['due_str']} | <b>Closes:</b> {c['close_str']} ({c['pay_by_str']})</div>", unsafe_allow_html=True)
+            render_card_transactions(c["name"])
+            
+            st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+            if st.button(f"➕ Record Transaction on {c['name']}", key=f"btn_add_{c['name']}"):
+                st.session_state.preset_account = c["name"]
+                st.rerun()
 
 # ------------------------------------------
 # TAB 4: GOALS HUB
@@ -812,10 +850,8 @@ with tabs[4]:
             st.session_state.chat_messages.append({"role": "assistant", "content": bot_reply})
 
 # ==========================================
-# 6. ASYNC POPULATE SUMMARY PLACEHOLDER (POST-UI RENDER)
+# 6. ASYNC POPULATE SUMMARY PLACEHOLDER
 # ==========================================
-# The entire UI finishes building and displaying instantly first,
-# then populates the placeholder box with the cached/fresh AI insights.
 ai_insight_text = fetch_ai_insights_cached(
     net_liquid_cash, total_cash, personal_cc_debt, biz_cc_debt, personal_utilization, personal_cc_limit
 )
