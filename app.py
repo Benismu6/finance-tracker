@@ -364,11 +364,24 @@ HOME_GOAL = 26500.00
 goal_progress = min(total_cash / HOME_GOAL, 1.0)
 remaining_goal = max(HOME_GOAL - total_cash, 0.0)
 
+# Master categories list & $300/wk Lean Budget Targets
 categories_list = [
-    "Groceries & Food", "Vehicle & Gas", "Housing & Rent", 
-    "Dining Out & Coffee", "Utilities & Phone", "Personal & Entertainment", 
-    "Subscriptions & Software", "Business Operations", "Miscellaneous / Buffer"
+    "Vehicle & Gas", "Housing & Rent", "Groceries & Food", 
+    "Personal & Entertainment", "Dining Out & Coffee", 
+    "Business Operations", "Subscriptions & Software", "Miscellaneous / Buffer"
 ]
+
+WEEKLY_BUDGET_TARGETS = {
+    "Vehicle & Gas": 100.00,
+    "Housing & Rent": 50.00,
+    "Groceries & Food": 50.00,
+    "Personal & Entertainment": 50.00,
+    "Dining Out & Coffee": 30.00,
+    "Business Operations": 10.00,
+    "Subscriptions & Software": 10.00,
+    "Miscellaneous / Buffer": 0.00
+}
+WEEKLY_BUDGET_TOTAL = 300.00
 
 # ==========================================
 # 4. DIRECT ACTION MODAL HANDLERS
@@ -529,7 +542,7 @@ def fetch_ai_insights_cached(net_cash, tot_cash, p_debt, b_debt, p_util, azeo_ca
     return f"💡 **Executive Snapshot:** Net liquid cash stands at \\${net_cash:,.2f} with credit utilization optimized at {p_util:.2f}%. Maintain {azeo_card} at ~\\$10 for your AZEO boost while clearing non-AZEO cards to \\$0."
 
 # ==========================================
-# 6. APP TABS & UI RENDERING
+# 6. APP TABS & RE-ORDERED UI RENDERING
 # ==========================================
 tabs = st.tabs([
     "⚡ Command Center", 
@@ -823,10 +836,10 @@ with tabs[1]:
                 open_card_action_dialog(c["name"], bal)
 
 # ------------------------------------------
-# TAB 3: ANALYTICS & CHARTS
+# TAB 3: ANALYTICS & CHARTS (WITH LEAN $300/WK BUDGET TRACKER)
 # ------------------------------------------
 with tabs[2]:
-    st.subheader("📊 Financial Analytics & Trends")
+    st.subheader("📊 Financial Analytics & Budget Tracking")
 
     if "current_analytics_date" not in st.session_state:
         st.session_state.current_analytics_date = date.today()
@@ -843,11 +856,11 @@ with tabs[2]:
     ref_date = st.session_state.current_analytics_date
     df_clean = df_tx.copy() if not df_tx.empty else pd.DataFrame()
 
-    # BLOCK 1: WEEKLY ANALYTICS
+    # BLOCK 1: WEEKLY BUDGET & SPENDING ANALYTICS
     week_start = ref_date - timedelta(days=ref_date.weekday())
     week_end = week_start + timedelta(days=6)
 
-    st.markdown("### 🗓️ Weekly Analytics")
+    st.markdown("### 🗓️ Weekly Budget Analytics ($300 Cap)")
     
     w_col1, w_col2, w_col3 = st.columns([1, 4, 1])
     with w_col1:
@@ -869,22 +882,41 @@ with tabs[2]:
     w_income = df_week[df_week["Type"] == "Income"]["Amount"].sum() if not df_week.empty else 0.0
     w_expense = df_week[df_week["Type"] == "Expense"]["Amount"].sum() if not df_week.empty else 0.0
     w_net = w_income - w_expense
+    
+    # Budget tracking metrics
+    w_budget_remaining = WEEKLY_BUDGET_TOTAL - w_expense
+    w_budget_color = "#34D399" if w_budget_remaining >= 0 else "#F87171"
+    w_budget_status = f"+${w_budget_remaining:,.2f} under" if w_budget_remaining >= 0 else f"-${abs(w_budget_remaining):,.2f} over"
 
-    ws_1, ws_2, ws_3 = st.columns(3)
+    ws_1, ws_2, ws_3, ws_4 = st.columns(4)
     with ws_1:
-        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">INCOME</div><div style="font-size:16px; font-weight:800; color:#34D399;">+${w_income:,.2f}</div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">INCOME</div><div style="font-size:15px; font-weight:800; color:#34D399;">+${w_income:,.2f}</div></div>""", unsafe_allow_html=True)
     with ws_2:
-        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">EXPENSES</div><div style="font-size:16px; font-weight:800; color:#F87171;">-${w_expense:,.2f}</div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">SPENT</div><div style="font-size:15px; font-weight:800; color:#F87171;">-${w_expense:,.2f}</div></div>""", unsafe_allow_html=True)
     with ws_3:
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">$300 BUDGET</div><div style="font-size:15px; font-weight:800; color:{w_budget_color};">{w_budget_status}</div></div>""", unsafe_allow_html=True)
+    with ws_4:
         net_color = "#38BDF8" if w_net >= 0 else "#F87171"
-        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">NET CASH</div><div style="font-size:16px; font-weight:800; color:{net_color};">${w_net:,.2f}</div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">NET CASH</div><div style="font-size:15px; font-weight:800; color:{net_color};">${w_net:,.2f}</div></div>""", unsafe_allow_html=True)
 
     w_exp_df = df_week[df_week["Type"] == "Expense"] if not df_week.empty else pd.DataFrame()
+    
+    # Weekly Category Progress vs Targets
+    with st.expander("🔍 View Weekly Budget Limits by Category", expanded=False):
+        for cat_name, limit_amt in WEEKLY_BUDGET_TARGETS.items():
+            if limit_amt > 0:
+                spent_cat = w_exp_df[w_exp_df["Category"] == cat_name]["Amount"].sum() if not w_exp_df.empty else 0.0
+                cat_prog = min(spent_cat / limit_amt, 1.0)
+                rem_cat = limit_amt - spent_cat
+                rem_str = f"+${rem_cat:.2f} left" if rem_cat >= 0 else f"-${abs(rem_cat):.2f} OVER"
+                st.caption(f"**{cat_name}:** ${spent_cat:,.2f} / ${limit_amt:,.2f} ({rem_str})")
+                st.progress(cat_prog)
+
     if not w_exp_df.empty:
         w_cat_summary = w_exp_df.groupby("Category")["Amount"].sum().reset_index()
         fig_week_pie = px.pie(
             w_cat_summary, values="Amount", names="Category", hole=0.5,
-            title=f"Week of {week_start.strftime('%b %d')} Spending",
+            title=f"Week of {week_start.strftime('%b %d')} Spending vs. $300 Budget",
             color_discrete_sequence=px.colors.qualitative.Pastel
         )
         fig_week_pie.update_layout(
@@ -897,12 +929,17 @@ with tabs[2]:
 
     st.divider()
 
-    # BLOCK 2: MONTHLY ANALYTICS
+    # BLOCK 2: MONTHLY BUDGET & SPENDING ANALYTICS
     m_year, m_month = ref_date.year, ref_date.month
     month_start = date(m_year, m_month, 1)
     month_end = date(m_year, m_month, calendar.monthrange(m_year, m_month)[1])
 
-    st.markdown("### 📆 Monthly Analytics")
+    # Dynamic Monthly Budget (Based on exact weeks in this month)
+    days_in_month = (month_end - month_start).days + 1
+    monthly_budget_target = (days_in_month / 7.0) * WEEKLY_BUDGET_TOTAL
+
+    st.markdown(f"### 📆 Monthly Budget Analytics ({month_start.strftime('%B %Y')})")
+    
     m_col1, m_col2, m_col3 = st.columns([1, 4, 1])
     with m_col1:
         if st.button("◀", key="prev_month_btn", help="Previous Month"):
@@ -928,21 +965,27 @@ with tabs[2]:
     m_expense = df_month[df_month["Type"] == "Expense"]["Amount"].sum() if not df_month.empty else 0.0
     m_net = m_income - m_expense
 
-    ms_1, ms_2, ms_3 = st.columns(3)
+    m_budget_remaining = monthly_budget_target - m_expense
+    m_budget_color = "#34D399" if m_budget_remaining >= 0 else "#F87171"
+    m_budget_status = f"+${m_budget_remaining:,.2f} under" if m_budget_remaining >= 0 else f"-${abs(m_budget_remaining):,.2f} over"
+
+    ms_1, ms_2, ms_3, ms_4 = st.columns(4)
     with ms_1:
-        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">MONTH INCOME</div><div style="font-size:16px; font-weight:800; color:#34D399;">+${m_income:,.2f}</div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">INCOME</div><div style="font-size:15px; font-weight:800; color:#34D399;">+${m_income:,.2f}</div></div>""", unsafe_allow_html=True)
     with ms_2:
-        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">MONTH EXPENSES</div><div style="font-size:16px; font-weight:800; color:#F87171;">-${m_expense:,.2f}</div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">SPENT</div><div style="font-size:15px; font-weight:800; color:#F87171;">-${m_expense:,.2f}</div></div>""", unsafe_allow_html=True)
     with ms_3:
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">BUDGET (${monthly_budget_target:,.0f})</div><div style="font-size:15px; font-weight:800; color:{m_budget_color};">{m_budget_status}</div></div>""", unsafe_allow_html=True)
+    with ms_4:
         m_net_color = "#38BDF8" if m_net >= 0 else "#F87171"
-        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">MONTH NET</div><div style="font-size:16px; font-weight:800; color:{m_net_color};">${m_net:,.2f}</div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">NET CASH</div><div style="font-size:15px; font-weight:800; color:{m_net_color};">${m_net:,.2f}</div></div>""", unsafe_allow_html=True)
 
     m_exp_df = df_month[df_month["Type"] == "Expense"] if not df_month.empty else pd.DataFrame()
     if not m_exp_df.empty:
         m_cat_summary = m_exp_df.groupby("Category")["Amount"].sum().reset_index()
         fig_month_pie = px.pie(
             m_cat_summary, values="Amount", names="Category", hole=0.55,
-            title=f"{month_start.strftime('%B %Y')} Full Breakdown",
+            title=f"{month_start.strftime('%B %Y')} Spending Breakdown",
             color_discrete_sequence=px.colors.qualitative.Prism
         )
         fig_month_pie.update_layout(
