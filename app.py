@@ -107,8 +107,8 @@ st.markdown("""
     .stButton>button {
         width: 100%;
         border-radius: 10px;
-        height: 40px;
-        font-size: 14px;
+        height: 38px;
+        font-size: 13px;
         font-weight: 700;
         background-color: #2563EB;
         color: white;
@@ -116,29 +116,37 @@ st.markdown("""
         box-shadow: 0 2px 6px rgba(37,99,235,0.4);
     }
     
-    /* RESTORED HIGH-CONTRAST CARD LAYOUT AS EXPANDER */
+    /* ORIGINAL CARD BOX STYLING */
+    .card-box {
+        background-color: #1E293B;
+        border-radius: 12px 12px 0px 0px;
+        padding: 14px 16px;
+        border-top: 1px solid #334155;
+        border-left: 1px solid #334155;
+        border-right: 1px solid #334155;
+        margin-bottom: 0px;
+    }
+
+    /* ATTACHED CARD EXPANDER STYLING */
     div[data-testid="stExpander"] {
-        border: 1px solid #334155 !important;
-        border-radius: 12px !important;
+        border-top: none !important;
+        border-left: 1px solid #334155 !important;
+        border-right: 1px solid #334155 !important;
+        border-bottom: 1px solid #334155 !important;
+        border-radius: 0px 0px 12px 12px !important;
         background-color: #1E293B !important;
-        margin-bottom: 10px !important;
+        margin-bottom: 12px !important;
         overflow: hidden !important;
     }
     div[data-testid="stExpander"] summary {
-        background-color: #1E293B !important;
-        padding: 12px 14px !important;
-        font-size: 14px !important;
-        color: #F8FAFC !important;
-        border-radius: 12px !important;
+        background-color: #162032 !important;
+        padding: 8px 14px !important;
+        font-size: 12px !important;
+        color: #93C5FD !important;
+        border-radius: 0px 0px 12px 12px !important;
     }
     div[data-testid="stExpander"] summary:hover {
-        background-color: #243248 !important;
-    }
-    div[data-testid="stExpander"] summary p {
-        font-weight: 700 !important;
-        color: #F8FAFC !important;
-        font-size: 14px !important;
-        margin: 0 !important;
+        background-color: #1e2d44 !important;
     }
     div[data-testid="stExpander"] div[role="region"] {
         background-color: #0F172A !important;
@@ -146,9 +154,9 @@ st.markdown("""
         border-top: 1px solid #334155 !important;
     }
 
-    .badge-opt { background-color: #065F46; color: #6EE7B7; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
-    .badge-warn { background-color: #7C2D12; color: #FDBA74; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
-    .badge-biz { background-color: #312E81; color: #C7D2FE; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+    .badge-opt { background-color: #065F46; color: #6EE7B7; padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .badge-warn { background-color: #7C2D12; color: #FDBA74; padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .badge-biz { background-color: #312E81; color: #C7D2FE; padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -350,19 +358,19 @@ def fetch_ai_insights_cached(net_cash, tot_cash, p_debt, b_debt, p_util, azeo_ca
             genai.configure(api_key=api_key)
             model = genai.GenerativeModel("gemini-3.6-flash")
             prompt = f"""
-            You are a sharp financial advisor. Today's date is {today_dt.strftime('%B %d, %Y')}.
+            You are a sharp personal wealth advisor. Today's date is {today_dt.strftime('%B %d, %Y')}.
             Provide a direct 2-sentence executive summary:
             - Net Liquid Cash is ${net_cash:,.2f} (Total Cash: ${tot_cash:,.2f}, Personal CC Debt: ${p_debt:,.2f}, Biz Debt: ${b_debt:,.2f}).
-            - Personal Util: {p_util:.2f}%.
-            - Active AZEO Target Card: {azeo_card} (keep at ~$10 for 1% reporting boost).
+            - Personal Credit Util: {p_util:.2f}%.
+            - Active AZEO Card: {azeo_card} (maintain at ~$10 for optimal credit reporting).
             - Unpaid Cards needing payoff before next statement close: {active_unpaid_cards if active_unpaid_cards else 'None, all other cards are reporting $0'}.
-            Do NOT mention past dates. Keep it punchy and under 40 words total.
+            Do NOT mention past dates or outdated deadlines. Keep it punchy, practical, and under 35 words total.
             """
             response = model.generate_content(prompt)
             return response.text.replace("$", r"\$")
     except Exception:
         pass
-    return f"💡 **Executive Snapshot:** Net liquid cash stands at \\${net_cash:,.2f} with personal utilization optimized at {p_util:.2f}%. Maintain {azeo_card} at ~\\$10 for your AZEO boost while keeping all other cards at \\$0."
+    return f"💡 **Executive Snapshot:** Net liquid cash stands at \\${net_cash:,.2f} with credit utilization optimized at {p_util:.2f}%. Maintain {azeo_card} at ~\\$10 for your AZEO boost while keeping all other cards at \\$0."
 
 # ==========================================
 # 5. APP TABS & INSTANT UI RENDERING
@@ -392,7 +400,7 @@ def render_card_transactions(acc_name):
         ].tail(5)
         
         if not sub_tx.empty:
-            st.markdown("<div style='font-size:12px; font-weight:700; color:#94A3B8; margin-top:4px; margin-bottom:4px;'>Last 5 Transactions:</div>", unsafe_allow_html=True)
+            st.markdown("<div style='font-size:12px; font-weight:700; color:#94A3B8; margin-top:2px; margin-bottom:4px;'>Last 5 Transactions:</div>", unsafe_allow_html=True)
             for _, r in sub_tx.iloc[::-1].iterrows():
                 t_type = r.get("Type", "Expense")
                 amt = float(r.get("Amount", 0.0))
@@ -729,24 +737,34 @@ with tabs[1]:
                     st.rerun()
 
 # ------------------------------------------
-# TAB 3: ACCOUNTS & CREDIT HUB (RESTORED STYLE + FULL CARD EXPANDERS)
+# TAB 3: ACCOUNTS & CREDIT HUB (FULL CARD UI ON TOP, EXPANDER DIRECTLY ATTACHED)
 # ------------------------------------------
 with tabs[2]:
     st.subheader("🏦 Cash & Checking Spread")
-    st.caption("Tap any card to view recent transactions and record new entries.")
+    st.caption("All balances update live. Click any card below to open its ledger.")
     
     for acc in live_cash_registry:
         bal = acc["current_balance"]
         pct_of_total = (bal / total_cash) * 100 if total_cash > 0 else 0.0
         
-        card_label = f"💵  {acc['name']}  —  ${bal:,.2f}  ({pct_of_total:.1f}% of cash)"
-        with st.expander(card_label, expanded=False):
-            st.markdown(f"""
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <span style="font-size:12px; color:#94A3B8;"><b>Role:</b> {acc['role']}</span>
-                <span style="font-weight:800; font-size:16px; color:#38BDF8;">${bal:,.2f}</span>
+        # 1. Full Visible Card Block (Never collapsed/hidden)
+        st.markdown(f"""
+        <div class="card-box">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{acc['name']}</span>
+                    <div style="font-size:12px; color:#94A3B8;">{acc['role']}</div>
+                </div>
+                <div style="text-align:right;">
+                    <span style="font-weight:800; font-size:18px; color:#38BDF8;">${bal:,.2f}</span>
+                    <div style="font-size:11px; color:#64748B;">{pct_of_total:.1f}% of cash</div>
+                </div>
             </div>
-            """, unsafe_allow_html=True)
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # 2. Seamlessly Attached Accordion Footer
+        with st.expander("🔍 View Recent Activity & Quick Action", expanded=False):
             render_card_transactions(acc["name"])
             st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
             if st.button(f"➕ Record Transaction on {acc['name']}", key=f"btn_add_{acc['name']}"):
@@ -756,7 +774,7 @@ with tabs[2]:
     st.divider()
 
     st.subheader("💳 Personal Credit Cards (AZEO Strategy)")
-    st.caption(f"Overall Personal Util: **{personal_utilization:.2f}%** (${personal_cc_debt:,.2f} / ${personal_cc_limit:,.2f}). Target AZEO card: **{azeo_selected_card_name}**.")
+    st.caption(f"Overall Personal Util: **{personal_utilization:.2f}%** (${personal_cc_debt:,.2f} / ${personal_cc_limit:,.2f}). Maintain **{azeo_selected_card_name}** at ~$10 and all others at $0.")
     
     for c in live_personal_cc:
         bal = c["current_balance"]
@@ -764,35 +782,37 @@ with tabs[2]:
         util = c["utilization"]
         
         if c.get("is_azeo_active"):
-            badge_text = "✅ AZEO ACTIVE (~1%)"
             badge_html = '<span class="badge-opt">✅ AZEO ACTIVE (~1%)</span>'
             action_text = f"Leave ~{c['target']} to report on {c['close_str']}"
         elif bal > 0:
-            badge_text = "⚠️ PAY TO $0"
             badge_html = '<span class="badge-warn">⚠️ PAY TO $0</span>'
             action_text = f"Pay ${bal:.2f} {c['pay_by_str']} (Due {c['due_str']})"
         else:
-            badge_text = "✅ $0 REPORTING"
-            badge_html = '<span class="badge-opt">✅ ZERO REPORTING ($0)</span>'
+            badge_html = '<span class="badge-opt">✅ $0 REPORTING</span>'
             action_text = f"Next Due: {c['due_str']} | Closes: {c['close_str']}"
             
-        card_label = f"💳  {c['name']}  —  ${bal:,.2f} ({util:.1f}%)  |  {badge_text}"
-        with st.expander(card_label, expanded=False):
-            st.markdown(f"""
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        # 1. Full Visible Card Block
+        st.markdown(f"""
+        <div class="card-box">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                 <div>
-                    <span style="font-size:12px; color:#94A3B8;"><b>Limit:</b> ${limit:,.0f}</span>
+                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{c['name']}</span>
+                    <div style="font-size:12px; color:#64748B;">Limit: ${limit:,.0f}</div>
                 </div>
                 <div style="text-align:right;">
-                    <span style="font-weight:800; font-size:16px; color:#F8FAFC;">${bal:,.2f}</span>
-                    <span style="font-size:11px; color:#94A3B8; margin-left:4px;">({util:.1f}%)</span>
+                    <span style="font-weight:800; font-size:18px; color:#F8FAFC;">${bal:.2f}</span>
+                    <span style="font-size:12px; font-weight:700; color:#94A3B8; margin-left:4px;">({util:.1f}%)</span>
                 </div>
             </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
                 <span style="font-size:12px; color:#CBD5E1;">{action_text}</span>
                 <div>{badge_html}</div>
             </div>
-            """, unsafe_allow_html=True)
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # 2. Seamlessly Attached Accordion Footer
+        with st.expander("🔍 View Recent Activity & Quick Action", expanded=False):
             render_card_transactions(c["name"])
             st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
             if st.button(f"➕ Record Transaction on {c['name']}", key=f"btn_add_{c['name']}"):
@@ -806,18 +826,28 @@ with tabs[2]:
     
     for c in live_biz_cc:
         bal = c["current_balance"]
-        card_label = f"💼  {c['name']}  —  ${bal:,.2f}  |  💼 BUSINESS"
-        with st.expander(card_label, expanded=False):
-            st.markdown(f"""
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                <span style="font-size:12px; color:#94A3B8;"><b>Business Card</b></span>
-                <span style="font-weight:800; font-size:16px; color:#F8FAFC;">${bal:,.2f}</span>
+        
+        # 1. Full Visible Card Block
+        st.markdown(f"""
+        <div class="card-box">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div>
+                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{c['name']}</span>
+                    <div style="font-size:12px; color:#64748B;">Business Card</div>
+                </div>
+                <div style="text-align:right;">
+                    <span style="font-weight:800; font-size:18px; color:#F8FAFC;">${bal:.2f}</span>
+                </div>
             </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
                 <span style="font-size:12px; color:#CBD5E1;">Due: {c['due_str']} | Closes: {c['close_str']} ({c['pay_by_str']})</span>
                 <div><span class="badge-biz">💼 BUSINESS</span></div>
             </div>
-            """, unsafe_allow_html=True)
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # 2. Seamlessly Attached Accordion Footer
+        with st.expander("🔍 View Recent Activity & Quick Action", expanded=False):
             render_card_transactions(c["name"])
             st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
             if st.button(f"➕ Record Transaction on {c['name']}", key=f"btn_add_{c['name']}"):
@@ -830,7 +860,7 @@ with tabs[2]:
 with tabs[3]:
     st.subheader("🏠 Baltimore Home Purchase Target")
     st.progress(goal_progress)
-    st.caption(f"**${total_cash:,.2f}** saved of **${HOME_GOAL:,.2f}** goal ({(goal_progress*100):.1f}%)")
+    st.caption(f"**${total_cash:,.2f}** saved of **${HOME_GOAL:,.2f}** goal ({(goal_progress*100):.1f}%)[cite: 1]")
     
     col_a, col_b = st.columns(2)
     with col_a:
@@ -850,16 +880,16 @@ with tabs[3]:
         
     st.markdown("""
     ---
-    **10% Down Acquisition Strategy Summary:**
-    * **Target Price:** $300,000 | **Down Payment (10%):** $30,000
-    * **Estimated Closing & Prepaids:** $11,000
-    * **Credits & Assistance Applied:** -$21,000
-      * *2.5% Buyer Agent Commission Credit:* -$7,500
-      * *Maryland Mortgage Program (MMP) DPA:* -$9,000
-      * *Seller Concessions (1.5%):* -$4,500
-    * **Net Cash at Settlement:** $20,000
-    * **Post-Closing 3-Mo Reserves:** $6,500
-    * **Total Liquid Target:** **$26,500**
+    **10% Down Acquisition Strategy Summary:**[cite: 1]
+    * **Target Price:** $300,000 | **Down Payment (10%):** $30,000[cite: 1]
+    * **Estimated Closing & Prepaids:** $11,000[cite: 1]
+    * **Credits & Assistance Applied:** -$21,000[cite: 1]
+      * *2.5% Buyer Agent Commission Credit:* -$7,500[cite: 1]
+      * *Maryland Mortgage Program (MMP) DPA:* -$9,000[cite: 1]
+      * *Seller Concessions (1.5%):* -$4,500[cite: 1]
+    * **Net Cash at Settlement:** $20,000[cite: 1]
+    * **Post-Closing 3-Mo Reserves:** $6,500[cite: 1]
+    * **Total Liquid Target:** **$26,500**[cite: 1]
     """)
 
 # ------------------------------------------
