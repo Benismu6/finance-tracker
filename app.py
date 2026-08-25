@@ -77,7 +77,7 @@ st.markdown("""
     }
     div[data-baseweb="tab-highlight"] { display: none !important; }
 
-    /* UI Cards */
+    /* UI Hero Card */
     .hero-card {
         background: linear-gradient(135deg, #1E3A8A 0%, #0F172A 100%);
         border: 1px solid #3B82F6;
@@ -87,15 +87,21 @@ st.markdown("""
         margin-bottom: 12px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.25);
     }
-    .metric-val { font-size: 26px; font-weight: 800; color: #38BDF8; }
-    .metric-sub { font-size: 12px; color: #94A3B8; }
+    .metric-val { 
+        font-size: 30px; 
+        font-weight: 800; 
+        color: #38BDF8; 
+        text-align: right;
+        letter-spacing: -0.5px;
+    }
+    .metric-sub { font-size: 12px; color: #94A3B8; text-align: right; }
     
     .stat-box {
         background-color: #1E293B;
         border: 1px solid #334155;
         border-radius: 12px;
         padding: 10px;
-        text-align: center;
+        text-align: right;
     }
     
     .stButton>button {
@@ -110,7 +116,7 @@ st.markdown("""
         box-shadow: 0 2px 6px rgba(37,99,235,0.4);
     }
     
-    /* TRANSFORM EXPANDER HEADER INTO THE CARD ITSELF */
+    /* RESTORED HIGH-CONTRAST CARD LAYOUT AS EXPANDER */
     div[data-testid="stExpander"] {
         border: 1px solid #334155 !important;
         border-radius: 12px !important;
@@ -132,6 +138,7 @@ st.markdown("""
         font-weight: 700 !important;
         color: #F8FAFC !important;
         font-size: 14px !important;
+        margin: 0 !important;
     }
     div[data-testid="stExpander"] div[role="region"] {
         background-color: #0F172A !important;
@@ -239,39 +246,62 @@ total_cash = sum(c["current_balance"] for c in live_cash_registry)
 
 # Personal CC definitions
 personal_cc_definitions = [
-    {"name": "Chase 1993", "base": 517.70, "limit": 10600.00, "due_day": 1, "close_day": 4, "is_primary": True, "target": "$0.00"},
-    {"name": "Chase 2207", "base": 9.52, "limit": 4900.00, "due_day": 1, "close_day": 4, "is_azeo_active": True, "target": "~$10.00 (1%)"},
-    {"name": "BofA 5309", "base": 22.21, "limit": 7500.00, "due_day": 24, "close_day": 27, "target": "$0.00"},
-    {"name": "BofA 7197", "base": 37.12, "limit": 3500.00, "due_day": 24, "close_day": 27, "target": "$0.00"},
-    {"name": "Apple 1765", "base": 0.00, "limit": 2000.00, "due_day": -1, "close_day": 3, "target": "$0.00"},
-    {"name": "TJX", "base": 0.00, "limit": 3200.00, "due_day": 5, "close_day": 8, "target": "$0.00"}
+    {"name": "Chase 1993", "base": 517.70, "limit": 10600.00, "due_day": 1, "close_day": 4, "is_primary": True},
+    {"name": "Chase 2207", "base": 9.52, "limit": 4900.00, "due_day": 1, "close_day": 4},
+    {"name": "BofA 5309", "base": 22.21, "limit": 7500.00, "due_day": 24, "close_day": 27},
+    {"name": "BofA 7197", "base": 37.12, "limit": 3500.00, "due_day": 24, "close_day": 27},
+    {"name": "Apple 1765", "base": 0.00, "limit": 2000.00, "due_day": -1, "close_day": 3},
+    {"name": "TJX", "base": 0.00, "limit": 3200.00, "due_day": 5, "close_day": 8}
 ]
 
 biz_cc_definitions = [
-    {"name": "Chase 0431", "base": 505.07, "limit": 0.00, "due_day": 1, "close_day": 7, "is_business": True, "target": "Business Expense"}
+    {"name": "Chase 0431", "base": 505.07, "limit": 0.00, "due_day": 1, "close_day": 7, "is_business": True}
 ]
 
-# 2. DYNAMIC PERSONAL CC BALANCES
-live_personal_cc = []
+# Calculate raw live balances first to determine best AZEO candidate
+temp_personal_cards = []
 for card in personal_cc_definitions:
     c_name = card["name"]
     spent = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "Expense")]["Amount"].sum()
     paid = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "CC Payment")]["Amount"].sum()
     current_bal = max(card["base"] + spent - paid, 0.0)
+    temp_personal_cards.append({**card, "current_balance": current_bal})
+
+# DYNAMIC AZEO SELECTION:
+# Select the card with a non-zero balance closest to $10, or default to Chase 2207
+non_zero_cards = [c for c in temp_personal_cards if c["current_balance"] > 0]
+if non_zero_cards:
+    azeo_selected_card_name = min(non_zero_cards, key=lambda x: abs(x["current_balance"] - 10.0))["name"]
+else:
+    azeo_selected_card_name = "Chase 2207"
+
+# Build live personal CC list with dynamically rolling dates & status
+live_personal_cc = []
+for card in temp_personal_cards:
+    c_name = card["name"]
+    current_bal = card["current_balance"]
     
     next_due = get_next_recurring_date(card["due_day"], today_dt)
     next_close = get_next_recurring_date(card["close_day"], today_dt)
     pay_by_date = next_due - timedelta(days=1)
     
+    is_azeo = (c_name == azeo_selected_card_name)
+    
     card_dict = dict(card)
-    card_dict["current_balance"] = current_bal
+    card_dict["is_azeo_active"] = is_azeo
     card_dict["utilization"] = (current_bal / card["limit"]) * 100 if card["limit"] > 0 else 0.0
     card_dict["due_str"] = next_due.strftime("%b %d")
     card_dict["close_str"] = next_close.strftime("%b %d")
     card_dict["pay_by_str"] = f"By {pay_by_date.strftime('%b %d')}"
+    
+    if is_azeo:
+        card_dict["target"] = "~$10.00 (1%)"
+    else:
+        card_dict["target"] = "$0.00"
+        
     live_personal_cc.append(card_dict)
 
-# 3. DYNAMIC BUSINESS CC BALANCES
+# Build live business CC list with rolling dates
 live_biz_cc = []
 for card in biz_cc_definitions:
     c_name = card["name"]
@@ -313,23 +343,26 @@ def get_gemini_api_key():
     return None
 
 @st.cache_data(ttl=300, show_spinner=False)
-def fetch_ai_insights_cached(net_cash, tot_cash, p_debt, b_debt, p_util, p_lim):
+def fetch_ai_insights_cached(net_cash, tot_cash, p_debt, b_debt, p_util, azeo_card, active_unpaid_cards):
     try:
         api_key = get_gemini_api_key()
         if api_key:
             genai.configure(api_key=api_key)
             model = genai.GenerativeModel("gemini-3.6-flash")
             prompt = f"""
-            Act as an elite financial advisor. Provide a concise 2-sentence update:
-            - Net Liquid Cash: ${net_cash:,.2f} (Total Cash: ${tot_cash:,.2f}, Personal CCs: ${p_debt:,.2f}, Biz CC: ${b_debt:,.2f}).
-            - Personal Credit Util: {p_util:.2f}% across ${p_lim:,.2f} limit.
-            - Upcoming Actions: Pay BofA 5309 and BofA 7197 by Aug 23. Pay Chase 1993 and Chase 0431 by Aug 31. Keep Chase 2207 at $9.52 for AZEO boost.
+            You are a sharp financial advisor. Today's date is {today_dt.strftime('%B %d, %Y')}.
+            Provide a direct 2-sentence executive summary:
+            - Net Liquid Cash is ${net_cash:,.2f} (Total Cash: ${tot_cash:,.2f}, Personal CC Debt: ${p_debt:,.2f}, Biz Debt: ${b_debt:,.2f}).
+            - Personal Util: {p_util:.2f}%.
+            - Active AZEO Target Card: {azeo_card} (keep at ~$10 for 1% reporting boost).
+            - Unpaid Cards needing payoff before next statement close: {active_unpaid_cards if active_unpaid_cards else 'None, all other cards are reporting $0'}.
+            Do NOT mention past dates. Keep it punchy and under 40 words total.
             """
             response = model.generate_content(prompt)
             return response.text.replace("$", r"\$")
     except Exception:
         pass
-    return r"💡 **Key Next Steps:** Pay off BofA 5309 (\$22.21) & BofA 7197 (\$37.12) by August 23 to report \$0 on statement close. Maintain Chase 2207 at ~\$10 for AZEO personal credit optimization."
+    return f"💡 **Executive Snapshot:** Net liquid cash stands at \\${net_cash:,.2f} with personal utilization optimized at {p_util:.2f}%. Maintain {azeo_card} at ~\\$10 for your AZEO boost while keeping all other cards at \\$0."
 
 # ==========================================
 # 5. APP TABS & INSTANT UI RENDERING
@@ -377,7 +410,7 @@ def render_card_transactions(acc_name):
                         <span style="color:#CBD5E1; font-weight:600;">{label}</span>
                         <div style="font-size:10px; color:#64748B;">{date_val} • {t_type}</div>
                     </div>
-                    <div style="font-weight:700; color:{amt_color}; font-size:13px;">
+                    <div style="font-weight:800; color:{amt_color}; font-size:14px; text-align:right;">
                         {prefix}${amt:,.2f}
                     </div>
                 </div>
@@ -395,7 +428,7 @@ with tabs[0]:
     <div class="hero-card">
         <div style="display:flex; justify-content:space-between; align-items:center;">
             <span style="font-weight:700; font-size:15px;">💵 Net Liquid Cash</span>
-            <span style="color:#93C5FD; font-size:12px;">Personal Util: {personal_utilization:.2f}%</span>
+            <span style="color:#93C5FD; font-size:12px; font-weight:700;">Personal Util: {personal_utilization:.2f}%</span>
         </div>
         <div class="metric-val">${net_liquid_cash:,.2f}</div>
         <div class="metric-sub">Total Cash: ${total_cash:,.2f} | Personal Debt: ${personal_cc_debt:,.2f} | Biz Debt: ${biz_cc_debt:,.2f}</div>
@@ -594,12 +627,12 @@ with tabs[1]:
 
     ws_1, ws_2, ws_3 = st.columns(3)
     with ws_1:
-        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">INCOME</div><div style="font-size:15px; font-weight:700; color:#34D399;">+${w_income:,.2f}</div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">INCOME</div><div style="font-size:16px; font-weight:800; color:#34D399;">+${w_income:,.2f}</div></div>""", unsafe_allow_html=True)
     with ws_2:
-        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">EXPENSES</div><div style="font-size:15px; font-weight:700; color:#F87171;">-${w_expense:,.2f}</div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">EXPENSES</div><div style="font-size:16px; font-weight:800; color:#F87171;">-${w_expense:,.2f}</div></div>""", unsafe_allow_html=True)
     with ws_3:
         net_color = "#38BDF8" if w_net >= 0 else "#F87171"
-        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">NET CASH</div><div style="font-size:15px; font-weight:700; color:{net_color};">${w_net:,.2f}</div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">NET CASH</div><div style="font-size:16px; font-weight:800; color:{net_color};">${w_net:,.2f}</div></div>""", unsafe_allow_html=True)
 
     w_exp_df = df_week[df_week["Type"] == "Expense"] if not df_week.empty else pd.DataFrame()
     if not w_exp_df.empty:
@@ -655,12 +688,12 @@ with tabs[1]:
 
     ms_1, ms_2, ms_3 = st.columns(3)
     with ms_1:
-        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">MONTH INCOME</div><div style="font-size:15px; font-weight:700; color:#34D399;">+${m_income:,.2f}</div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">MONTH INCOME</div><div style="font-size:16px; font-weight:800; color:#34D399;">+${m_income:,.2f}</div></div>""", unsafe_allow_html=True)
     with ms_2:
-        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">MONTH EXPENSES</div><div style="font-size:15px; font-weight:700; color:#F87171;">-${m_expense:,.2f}</div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">MONTH EXPENSES</div><div style="font-size:16px; font-weight:800; color:#F87171;">-${m_expense:,.2f}</div></div>""", unsafe_allow_html=True)
     with ms_3:
         m_net_color = "#38BDF8" if m_net >= 0 else "#F87171"
-        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">MONTH NET</div><div style="font-size:15px; font-weight:700; color:{m_net_color};">${m_net:,.2f}</div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="stat-box"><div style="font-size:10px; color:#94A3B8;">MONTH NET</div><div style="font-size:16px; font-weight:800; color:{m_net_color};">${m_net:,.2f}</div></div>""", unsafe_allow_html=True)
 
     m_exp_df = df_month[df_month["Type"] == "Expense"] if not df_month.empty else pd.DataFrame()
     if not m_exp_df.empty:
@@ -696,20 +729,24 @@ with tabs[1]:
                     st.rerun()
 
 # ------------------------------------------
-# TAB 3: ACCOUNTS & CREDIT HUB (THE CARD IS THE DROPDOWN)
+# TAB 3: ACCOUNTS & CREDIT HUB (RESTORED STYLE + FULL CARD EXPANDERS)
 # ------------------------------------------
 with tabs[2]:
     st.subheader("🏦 Cash & Checking Spread")
-    st.caption("Tap any account to expand its recent ledger and record transactions.")
+    st.caption("Tap any card to view recent transactions and record new entries.")
     
     for acc in live_cash_registry:
         bal = acc["current_balance"]
         pct_of_total = (bal / total_cash) * 100 if total_cash > 0 else 0.0
         
-        # The entire card header is the dropdown button
-        expander_title = f"💵  {acc['name']}  —  ${bal:,.2f}  ({pct_of_total:.1f}% of cash)"
-        with st.expander(expander_title, expanded=False):
-            st.markdown(f"<div style='font-size:12px; color:#94A3B8; margin-bottom:6px;'><b>Role:</b> {acc['role']}</div>", unsafe_allow_html=True)
+        card_label = f"💵  {acc['name']}  —  ${bal:,.2f}  ({pct_of_total:.1f}% of cash)"
+        with st.expander(card_label, expanded=False):
+            st.markdown(f"""
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <span style="font-size:12px; color:#94A3B8;"><b>Role:</b> {acc['role']}</span>
+                <span style="font-weight:800; font-size:16px; color:#38BDF8;">${bal:,.2f}</span>
+            </div>
+            """, unsafe_allow_html=True)
             render_card_transactions(acc["name"])
             st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
             if st.button(f"➕ Record Transaction on {acc['name']}", key=f"btn_add_{acc['name']}"):
@@ -719,7 +756,7 @@ with tabs[2]:
     st.divider()
 
     st.subheader("💳 Personal Credit Cards (AZEO Strategy)")
-    st.caption(f"Overall Personal Util: **{personal_utilization:.2f}%** (${personal_cc_debt:,.2f} / ${personal_cc_limit:,.2f}). Maintain **Chase 2207** at ~$10 and all others at $0.")
+    st.caption(f"Overall Personal Util: **{personal_utilization:.2f}%** (${personal_cc_debt:,.2f} / ${personal_cc_limit:,.2f}). Target AZEO card: **{azeo_selected_card_name}**.")
     
     for c in live_personal_cc:
         bal = c["current_balance"]
@@ -727,22 +764,33 @@ with tabs[2]:
         util = c["utilization"]
         
         if c.get("is_azeo_active"):
-            badge_text = "✅ AZEO (~1%)"
+            badge_text = "✅ AZEO ACTIVE (~1%)"
+            badge_html = '<span class="badge-opt">✅ AZEO ACTIVE (~1%)</span>'
             action_text = f"Leave ~{c['target']} to report on {c['close_str']}"
         elif bal > 0:
             badge_text = "⚠️ PAY TO $0"
+            badge_html = '<span class="badge-warn">⚠️ PAY TO $0</span>'
             action_text = f"Pay ${bal:.2f} {c['pay_by_str']} (Due {c['due_str']})"
         else:
             badge_text = "✅ $0 REPORTING"
+            badge_html = '<span class="badge-opt">✅ ZERO REPORTING ($0)</span>'
             action_text = f"Next Due: {c['due_str']} | Closes: {c['close_str']}"
             
-        # The entire card header is the dropdown button
-        expander_title = f"💳  {c['name']}  —  ${bal:,.2f} ({util:.1f}%)  |  {badge_text}"
-        with st.expander(expander_title, expanded=False):
+        card_label = f"💳  {c['name']}  —  ${bal:,.2f} ({util:.1f}%)  |  {badge_text}"
+        with st.expander(card_label, expanded=False):
             st.markdown(f"""
-            <div style="display:flex; justify-content:space-between; font-size:12px; color:#CBD5E1; margin-bottom:6px;">
-                <span><b>Limit:</b> ${limit:,.0f}</span>
-                <span><b>Action:</b> {action_text}</span>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <div>
+                    <span style="font-size:12px; color:#94A3B8;"><b>Limit:</b> ${limit:,.0f}</span>
+                </div>
+                <div style="text-align:right;">
+                    <span style="font-weight:800; font-size:16px; color:#F8FAFC;">${bal:,.2f}</span>
+                    <span style="font-size:11px; color:#94A3B8; margin-left:4px;">({util:.1f}%)</span>
+                </div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <span style="font-size:12px; color:#CBD5E1;">{action_text}</span>
+                <div>{badge_html}</div>
             </div>
             """, unsafe_allow_html=True)
             render_card_transactions(c["name"])
@@ -758,9 +806,18 @@ with tabs[2]:
     
     for c in live_biz_cc:
         bal = c["current_balance"]
-        expander_title = f"💼  {c['name']}  —  ${bal:,.2f}  |  💼 BUSINESS"
-        with st.expander(expander_title, expanded=False):
-            st.markdown(f"<div style='font-size:12px; color:#CBD5E1; margin-bottom:6px;'><b>Due:</b> {c['due_str']} | <b>Closes:</b> {c['close_str']} ({c['pay_by_str']})</div>", unsafe_allow_html=True)
+        card_label = f"💼  {c['name']}  —  ${bal:,.2f}  |  💼 BUSINESS"
+        with st.expander(card_label, expanded=False):
+            st.markdown(f"""
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <span style="font-size:12px; color:#94A3B8;"><b>Business Card</b></span>
+                <span style="font-weight:800; font-size:16px; color:#F8FAFC;">${bal:,.2f}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <span style="font-size:12px; color:#CBD5E1;">Due: {c['due_str']} | Closes: {c['close_str']} ({c['pay_by_str']})</span>
+                <div><span class="badge-biz">💼 BUSINESS</span></div>
+            </div>
+            """, unsafe_allow_html=True)
             render_card_transactions(c["name"])
             st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
             if st.button(f"➕ Record Transaction on {c['name']}", key=f"btn_add_{c['name']}"):
@@ -780,14 +837,14 @@ with tabs[3]:
         st.markdown(f"""
         <div class="stat-box">
             <div style="font-size:11px; color:#94A3B8;">REMAINING GOAL</div>
-            <div style="font-size:18px; font-weight:700; color:#38BDF8;">${remaining_goal:,.2f}</div>
+            <div style="font-size:18px; font-weight:800; color:#38BDF8;">${remaining_goal:,.2f}</div>
         </div>
         """, unsafe_allow_html=True)
     with col_b:
         st.markdown(f"""
         <div class="stat-box">
             <div style="font-size:11px; color:#94A3B8;">TARGET DEADLINE</div>
-            <div style="font-size:16px; font-weight:700; color:#34D399;">March 1, 2027</div>
+            <div style="font-size:16px; font-weight:800; color:#34D399;">March 1, 2027</div>
         </div>
         """, unsafe_allow_html=True)
         
@@ -830,16 +887,17 @@ with tabs[4]:
         
         system_context = f"""
         You are an elite, highly knowledgeable personal financial advisor and real estate strategist assisting the user.
+        Today's date is {today_dt.strftime('%B %d, %Y')}.
         You have direct access to their live financial snapshot:
         - Total Cash on Hand: ${total_cash:,.2f} (BofA Checking: ${live_cash_registry[0]['current_balance']:,.2f}, SECU HYSA Home Fund: ${live_cash_registry[1]['current_balance']:,.2f})
         - Total Personal CC Debt: ${personal_cc_debt:,.2f} across ${personal_cc_limit:,.2f} limit (Overall Util: {personal_utilization:.2f}%)
         - Business CC Debt: ${biz_cc_debt:,.2f} (Chase 0431)
         - Net Liquid Cash: ${net_liquid_cash:,.2f}
-        - 1st Home Goal: $26,500 target by March 1, 2027 (${total_cash:,.2f} saved so far, ${remaining_goal:,.2f} remaining).
-        - AZEO Strategy: Maintain Chase 2207 at ~$10 (1% reporting) and all other cards at $0 reporting by statement close dates.
+        - 1st Home Goal: $26,500 target by March 1, 2027 (${total_cash:,.2f} saved so far, ${remaining_goal:,.2f} remaining)[cite: 1].
+        - Current Dynamic AZEO Card: {azeo_selected_card_name} (leave ~$10 to report on statement close).
         - Recent 15 Ledger Entries: {recent_tx_summary}
 
-        Provide direct, helpful, and concise guidance. When mentioning money, escape dollar signs with a backslash (e.g. \\$200) to prevent LaTeX formatting glitches.
+        Provide direct, helpful, and concise guidance. Keep it short and conversational. When mentioning money, escape dollar signs with a backslash (e.g. \\$200).
         """
 
         with st.chat_message("assistant"):
@@ -871,7 +929,10 @@ with tabs[4]:
 # ==========================================
 # 6. ASYNC POPULATE SUMMARY PLACEHOLDER
 # ==========================================
+unpaid_cards_list = [f"{c['name']} (${c['current_balance']:.2f})" for c in live_personal_cc if not c.get('is_azeo_active') and c['current_balance'] > 0]
+unpaid_str = ", ".join(unpaid_cards_list)
+
 ai_insight_text = fetch_ai_insights_cached(
-    net_liquid_cash, total_cash, personal_cc_debt, biz_cc_debt, personal_utilization, personal_cc_limit
+    net_liquid_cash, total_cash, personal_cc_debt, biz_cc_debt, personal_utilization, azeo_selected_card_name, unpaid_str
 )
 ai_placeholder.info(ai_insight_text)
