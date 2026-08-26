@@ -112,30 +112,44 @@ st.markdown("""
         box-shadow: 0 2px 6px rgba(37,99,235,0.4);
     }
 
-    /* TURN STREAMLIT EXPANDER DIRECTLY INTO THE CARD */
+    /* CARD CONTAINER BLOCK - ALWAYS VISIBLE */
+    .card-box {
+        background-color: #1E293B;
+        border-top: 1px solid #334155;
+        border-left: 1px solid #334155;
+        border-right: 1px solid #334155;
+        border-radius: 12px 12px 0px 0px;
+        padding: 14px 16px;
+        margin-bottom: 0px;
+    }
+
+    /* SEAMLESS ATTACHED EXPANDER DRAWER */
     div[data-testid="stExpander"] {
-        border: 1px solid #334155 !important;
-        border-radius: 12px !important;
+        border-top: none !important;
+        border-left: 1px solid #334155 !important;
+        border-right: 1px solid #334155 !important;
+        border-bottom: 1px solid #334155 !important;
+        border-radius: 0px 0px 12px 12px !important;
         background-color: #1E293B !important;
         margin-bottom: 12px !important;
         overflow: hidden !important;
     }
     div[data-testid="stExpander"] summary {
-        background-color: #1E293B !important;
-        padding: 14px 16px !important;
-        border-radius: 12px !important;
+        background-color: #162032 !important;
+        padding: 8px 14px !important;
+        font-size: 12px !important;
+        color: #93C5FD !important;
+        border-radius: 0px 0px 12px 12px !important;
         border: none !important;
         outline: none !important;
-        list-style: none !important;
-    }
-    div[data-testid="stExpander"] summary::-webkit-details-marker {
-        display: none !important;
     }
     div[data-testid="stExpander"] summary:hover {
-        background-color: #243248 !important;
+        background-color: #1e2d44 !important;
     }
     div[data-testid="stExpander"] summary p {
-        display: none !important;
+        color: #93C5FD !important;
+        font-weight: 700 !important;
+        font-size: 12px !important;
     }
     div[data-testid="stExpander"] div[role="region"] {
         background-color: #0F172A !important;
@@ -549,7 +563,7 @@ def fetch_ai_insights_cached(net_cash, tot_cash, p_debt, b_debt, p_util, azeo_ca
     return f"💡 **Executive Snapshot:** Net liquid cash stands at \\${net_cash:,.2f} with credit utilization optimized at {p_util:.2f}%. Maintain {azeo_card} at ~\\$10 for your AZEO boost while clearing non-AZEO cards to \\$0."
 
 # ==========================================
-# 6. APP TABS & UI RENDERING
+# 6. APP TABS & RE-ORDERED UI RENDERING
 # ==========================================
 tabs = st.tabs([
     "⚡ Command Center", 
@@ -745,7 +759,7 @@ with tabs[0]:
                     st.error(f"❌ Write Error: {str(err)}\n{traceback.format_exc()}")
 
 # ------------------------------------------
-# TAB 2: ACCOUNTS & CREDIT HUB (FULL CARD AS EXPANDER)
+# TAB 2: ACCOUNTS & CREDIT HUB (FULL VISIBILITY + EXPANDER)
 # ------------------------------------------
 with tabs[1]:
     st.subheader("🏦 Cash & Checking Spread")
@@ -754,9 +768,10 @@ with tabs[1]:
         bal = acc["current_balance"]
         pct_of_total = (bal / total_cash) * 100 if total_cash > 0 else 0.0
         
-        with st.expander(" ", expanded=False):
-            st.markdown(f"""
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:-6px;">
+        # 1. Full Visible Card Block (Always shows Name, Last 4, Balance, & % of Cash)
+        st.markdown(f"""
+        <div class="card-box">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
                 <div>
                     <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{acc['name']}</span>
                     <div style="font-size:12px; color:#94A3B8;">{acc['role']}</div>
@@ -766,8 +781,11 @@ with tabs[1]:
                     <div style="font-size:11px; color:#64748B;">{pct_of_total:.1f}% of cash</div>
                 </div>
             </div>
-            <div style="height:12px;"></div>
-            """, unsafe_allow_html=True)
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # 2. Attached Accordion Drawer
+        with st.expander("🔍 View Recent Activity & Actions", expanded=False):
             render_card_transactions(acc["name"])
             st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
             if st.button(f"⚡ Manage / Record on {acc['name']}", key=f"btn_bank_{acc['name']}"):
@@ -783,9 +801,10 @@ with tabs[1]:
         limit = c["limit"]
         util = c["utilization"]
         
-        with st.expander(" ", expanded=False):
-            st.markdown(f"""
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-top:-6px;">
+        # 1. Full Visible Card Block (Always shows Name, Last 4, Limit, Live Balance, Due/Close Date, & Badge)
+        st.markdown(f"""
+        <div class="card-box">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                 <div>
                     <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{c['name']}</span>
                     <div style="font-size:12px; color:#64748B;">Limit: ${limit:,.0f} | Closes: {c['close_str']}</div>
@@ -795,11 +814,15 @@ with tabs[1]:
                     <span style="font-size:12px; font-weight:700; color:#94A3B8; margin-left:4px;">({util:.1f}%)</span>
                 </div>
             </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; margin-bottom:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
                 <span style="font-size:12px; color:#CBD5E1;">{c['action_text']}</span>
                 <div>{c['badge_html']}</div>
             </div>
-            """, unsafe_allow_html=True)
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # 2. Attached Accordion Drawer
+        with st.expander("🔍 View Recent Activity & Actions", expanded=False):
             render_card_transactions(c["name"])
             st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
             if st.button(f"⚡ Manage / Record on {c['name']}", key=f"btn_card_{c['name']}"):
@@ -813,9 +836,10 @@ with tabs[1]:
     for c in live_biz_cc:
         bal = c["current_balance"]
         
-        with st.expander(" ", expanded=False):
-            st.markdown(f"""
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-top:-6px;">
+        # 1. Full Visible Card Block (Always shows Name, Last 4, Balance, Due & Close Dates)
+        st.markdown(f"""
+        <div class="card-box">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                 <div>
                     <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{c['name']}</span>
                     <div style="font-size:12px; color:#64748B;">Business Card</div>
@@ -824,11 +848,15 @@ with tabs[1]:
                     <span style="font-weight:800; font-size:18px; color:#F8FAFC;">${bal:.2f}</span>
                 </div>
             </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; margin-bottom:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
                 <span style="font-size:12px; color:#CBD5E1;">Due: {c['due_str']} | Closes: {c['close_str']}</span>
                 <div><span class="badge-biz">💼 BUSINESS</span></div>
             </div>
-            """, unsafe_allow_html=True)
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # 2. Attached Accordion Drawer
+        with st.expander("🔍 View Recent Activity & Actions", expanded=False):
             render_card_transactions(c["name"])
             st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
             if st.button(f"⚡ Manage / Record on {c['name']}", key=f"btn_biz_{c['name']}"):
@@ -903,6 +931,7 @@ with tabs[2]:
         spent_amt = w_exp_df[w_exp_df["Category"] == cat_name]["Amount"].sum() if not w_exp_df.empty else 0.0
         base_color = CATEGORY_COLORS.get(cat_name, "#3B82F6")
         
+        # 1. Spent Segment
         spent_slice = min(spent_amt, budget_amt)
         if spent_slice > 0:
             w_donut_labels.append(f"{cat_name} (Spent)")
@@ -910,6 +939,7 @@ with tabs[2]:
             w_donut_colors.append(base_color)
             w_donut_hovers.append(f"<b>{cat_name}</b><br>Spent: ${spent_amt:.2f} / ${budget_amt:.2f}<br>({(spent_amt/budget_amt*100):.1f}% of weekly limit)")
         
+        # 2. Remaining Unspent Segment
         unspent_slice = max(budget_amt - spent_amt, 0.0)
         if unspent_slice > 0:
             w_donut_labels.append(f"{cat_name} (Left)")
@@ -917,6 +947,7 @@ with tabs[2]:
             w_donut_colors.append("rgba(51, 65, 85, 0.35)")
             w_donut_hovers.append(f"<b>{cat_name}</b><br>Remaining: ${unspent_slice:.2f} of ${budget_amt:.2f} budget")
         
+        # 3. Overspend Extension
         if spent_amt > budget_amt:
             over_slice = spent_amt - budget_amt
             w_donut_labels.append(f"{cat_name} (Over)")
