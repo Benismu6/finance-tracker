@@ -5,7 +5,6 @@ import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 import calendar
 import traceback
-import streamlit.components.v1 as components
 from streamlit_gsheets import GSheetsConnection
 import gspread
 from google.oauth2.service_account import Credentials
@@ -111,6 +110,38 @@ st.markdown("""
         color: white;
         border: none;
         box-shadow: 0 2px 6px rgba(37,99,235,0.4);
+    }
+
+    /* ZERO-GAP CLICKABLE CARD CONTAINER */
+    details.card-container {
+        background-color: #1E293B;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        margin-bottom: 10px;
+        overflow: hidden;
+        transition: border-color 0.2s ease;
+    }
+    details.card-container[open] {
+        border-color: #3B82F6;
+    }
+    details.card-container > summary {
+        list-style: none;
+        outline: none;
+        cursor: pointer;
+        padding: 14px 16px;
+        background-color: #1E293B;
+        user-select: none;
+    }
+    details.card-container > summary::-webkit-details-marker {
+        display: none;
+    }
+    details.card-container > summary:hover {
+        background-color: #243248;
+    }
+    .card-drawer {
+        background-color: #0F172A;
+        padding: 12px 14px;
+        border-top: 1px solid #334155;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -271,6 +302,7 @@ for c in raw_personal_cards:
     stmt_due = c["stmt_due"]
     next_due = c["next_due"]
     next_close = c["next_close"]
+    pay_by_date = next_due - timedelta(days=1)
     
     is_azeo = (c_name == azeo_card_name)
     
@@ -305,11 +337,13 @@ for card in biz_cc_definitions:
     
     next_due = get_next_recurring_date(card["due_day"], today_dt)
     next_close = get_next_recurring_date(card["close_day"], today_dt)
+    pay_by_date = next_due - timedelta(days=1)
     
     card_dict = dict(card)
     card_dict["current_balance"] = current_bal
     card_dict["due_str"] = next_due.strftime("%b %d")
     card_dict["close_str"] = next_close.strftime("%b %d")
+    card_dict["pay_by_str"] = f"By {pay_by_date.strftime('%b %d')}"
     live_biz_cc.append(card_dict)
 
 personal_cc_debt = sum(c["current_balance"] for c in live_personal_cc)
@@ -354,65 +388,9 @@ CATEGORY_COLORS = {
 }
 
 # ==========================================
-# 4. CARD HTML RENDER HELPER (RAW COMPONENT)
+# 4. CARD HTML RENDERING HELPERS (UNINDENTED FOR CLEAN MARKDOWN)
 # ==========================================
-def generate_card_html(title, subtitle, right_top, right_sub, extra_left="", extra_right="", tx_html=""):
-    return f"""<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-    * {{ box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; }}
-    body {{ background: transparent; color: #F8FAFC; }}
-    details {{
-        background-color: #1E293B;
-        border: 1px solid #334155;
-        border-radius: 12px;
-        overflow: hidden;
-        margin-bottom: 4px;
-        transition: border-color 0.2s ease;
-    }}
-    details[open] {{ border-color: #3B82F6; }}
-    summary {{
-        list-style: none;
-        outline: none;
-        cursor: pointer;
-        padding: 14px 16px;
-        background-color: #1E293B;
-        user-select: none;
-    }}
-    summary::-webkit-details-marker {{ display: none; }}
-    summary:hover {{ background-color: #243248; }}
-    .drawer {{
-        background-color: #0F172A;
-        padding: 12px 14px;
-        border-top: 1px solid #334155;
-    }}
-</style>
-</head>
-<body>
-<details>
-    <summary>
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-            <div>
-                <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{title}</span>
-                <div style="font-size:12px; color:#94A3B8;">{subtitle}</div>
-            </div>
-            <div style="text-align:right;">
-                <span style="font-weight:800; font-size:18px; color:{'#38BDF8' if '$' in right_top and '.' in right_top else '#F8FAFC'};">{right_top}</span>
-                <div style="font-size:11px; color:#64748B;">{right_sub}</div>
-            </div>
-        </div>
-        {(f'<div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;"><span style="font-size:12px; color:#CBD5E1;">{extra_left}</span><div>{extra_right}</div></div>' if extra_left or extra_right else '')}
-    </summary>
-    <div class="drawer">
-        {tx_html}
-    </div>
-</details>
-</body>
-</html>"""
-
-def get_tx_rows_raw_html(acc_name):
+def get_tx_rows_html(acc_name):
     if not df_tx.empty and "Account" in df_tx.columns:
         sub_tx = df_tx[
             (df_tx["Account"] == acc_name) | 
@@ -431,19 +409,18 @@ def get_tx_rows_raw_html(acc_name):
                 amt_color = "#34D399" if t_type == "Income" else ("#60A5FA" if t_type == "CC Payment" else "#F87171")
                 prefix = "+" if t_type == "Income" else "-"
                 
-                html += f"""<div style="display:flex; justify-content:space-between; align-items:center; background:#162032; border-radius:6px; padding:6px 10px; margin-bottom:4px; font-size:12px; border:1px solid #334155;">
-                    <div>
-                        <span style="color:#CBD5E1; font-weight:600;">{label}</span>
-                        <div style="font-size:10px; color:#64748B;">{date_val} • {t_type}</div>
-                    </div>
-                    <div style="font-weight:800; color:{amt_color}; font-size:13px; text-align:right;">
-                        {prefix}${amt:,.2f}
-                    </div>
-                </div>"""
+                html += f"""<div style="display:flex; justify-content:space-between; align-items:center; background:#162032; border-radius:6px; padding:6px 10px; margin-bottom:4px; font-size:12px; border:1px solid #334155;"><div><span style="color:#CBD5E1; font-weight:600;">{label}</span><div style="font-size:10px; color:#64748B;">{date_val} • {t_type}</div></div><div style="font-weight:800; color:{amt_color}; font-size:13px; text-align:right;">{prefix}${amt:,.2f}</div></div>"""
             return html
         else:
             return "<div style='font-size:12px; color:#64748B; padding:4px 0;'>ℹ️ No transactions recorded for this account yet.</div>"
     return "<div style='font-size:12px; color:#64748B; padding:4px 0;'>ℹ️ No ledger records available.</div>"
+
+def render_account_card(title, subtitle, right_val, right_sub, extra_left="", extra_right="", tx_html=""):
+    bottom_bar = f"""<div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;"><span style="font-size:12px; color:#CBD5E1;">{extra_left}</span><div>{extra_right}</div></div>""" if (extra_left or extra_right) else ""
+    val_color = '#38BDF8' if '$' in right_val and '.' in right_val else '#F8FAFC'
+    
+    card_html = f"""<details class="card-container"><summary><div style="display:flex; justify-content:space-between; align-items:center;"><div><span style="font-weight:700; font-size:15px; color:#F8FAFC;">{title}</span><div style="font-size:12px; color:#94A3B8;">{subtitle}</div></div><div style="text-align:right;"><span style="font-weight:800; font-size:18px; color:{val_color};">{right_val}</span><div style="font-size:11px; color:#64748B;">{right_sub}</div></div></div>{bottom_bar}</summary><div class="card-drawer">{tx_html}</div></details>"""
+    st.markdown(card_html, unsafe_allow_html=True)
 
 # ==========================================
 # 5. AI EXECUTIVE SUMMARY & KEY FETCHER
@@ -638,7 +615,7 @@ with tabs[0]:
                     st.error(f"❌ Write Error: {str(err)}\n{traceback.format_exc()}")
 
 # ------------------------------------------
-# TAB 2: ACCOUNTS & CREDIT HUB (RAW ISOLATED HTML COMPONENTS)
+# TAB 2: ACCOUNTS & CREDIT HUB (ZERO GAP NATIVE HTML)
 # ------------------------------------------
 with tabs[1]:
     st.subheader("🏦 Cash & Checking Spread")
@@ -646,16 +623,15 @@ with tabs[1]:
     for acc in live_cash_registry:
         bal = acc["current_balance"]
         pct_of_total = (bal / total_cash) * 100 if total_cash > 0 else 0.0
-        tx_rows = get_tx_rows_raw_html(acc['name'])
+        tx_rows = get_tx_rows_html(acc['name'])
         
-        card_html_content = generate_card_html(
+        render_account_card(
             title=acc['name'],
             subtitle=acc['role'],
-            right_top=f"${bal:,.2f}",
+            right_val=f"${bal:,.2f}",
             right_sub=f"{pct_of_total:.1f}% of cash",
             tx_html=tx_rows
         )
-        components.html(card_html_content, height=270, scrolling=True)
 
     st.divider()
 
@@ -666,18 +642,17 @@ with tabs[1]:
         bal = c["current_balance"]
         limit = c["limit"]
         util = c["utilization"]
-        tx_rows = get_tx_rows_raw_html(c['name'])
+        tx_rows = get_tx_rows_html(c['name'])
         
-        card_html_content = generate_card_html(
+        render_account_card(
             title=c['name'],
             subtitle=f"Limit: ${limit:,.0f} | Closes: {c['close_str']}",
-            right_top=f"${bal:.2f}",
+            right_val=f"${bal:.2f}",
             right_sub=f"({util:.1f}%)",
             extra_left=c['action_text'],
             extra_right=c['badge_html'],
             tx_html=tx_rows
         )
-        components.html(card_html_content, height=295, scrolling=True)
 
     st.divider()
 
@@ -686,18 +661,17 @@ with tabs[1]:
     
     for c in live_biz_cc:
         bal = c["current_balance"]
-        tx_rows = get_tx_rows_raw_html(c['name'])
+        tx_rows = get_tx_rows_html(c['name'])
         
-        card_html_content = generate_card_html(
+        render_account_card(
             title=c['name'],
             subtitle="Business Card",
-            right_top=f"${bal:.2f}",
+            right_val=f"${bal:.2f}",
             right_sub="",
             extra_left=f"Due: {c['due_str']} | Closes: {c['close_str']}",
             extra_right='<span style="background-color:#312E81;color:#C7D2FE;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;">💼 BUSINESS</span>',
             tx_html=tx_rows
         )
-        components.html(card_html_content, height=295, scrolling=True)
 
 # ------------------------------------------
 # TAB 3: ANALYTICS & CHARTS (HOLE = 0.55 DONUT ENGINE)
