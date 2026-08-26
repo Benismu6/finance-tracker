@@ -111,41 +111,51 @@ st.markdown("""
         border: none;
         box-shadow: 0 2px 6px rgba(37,99,235,0.4);
     }
-    
-    .card-box {
+
+    /* NATIVE CLICKABLE CARD CONTAINER */
+    details.card-container {
         background-color: #1E293B;
-        border-radius: 12px 12px 0px 0px;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        margin-bottom: 12px;
+        overflow: hidden;
+        transition: all 0.2s ease;
+    }
+    details.card-container[open] {
+        border-color: #3B82F6;
+    }
+    
+    /* THE CARD ITSELF IS THE CLICKABLE HEADER */
+    details.card-container > summary {
+        list-style: none;
+        outline: none;
+        cursor: pointer;
         padding: 14px 16px;
+        background-color: #1E293B;
+        user-select: none;
+    }
+    details.card-container > summary::-webkit-details-marker {
+        display: none;
+    }
+    details.card-container > summary:hover {
+        background-color: #243248;
+    }
+    
+    /* EXPANDED INNER DRAWER */
+    .card-drawer {
+        background-color: #0F172A;
+        padding: 12px 14px;
         border-top: 1px solid #334155;
-        border-left: 1px solid #334155;
-        border-right: 1px solid #334155;
-        margin-bottom: 0px;
     }
 
-    div[data-testid="stExpander"] {
-        border-top: none !important;
-        border-left: 1px solid #334155 !important;
-        border-right: 1px solid #334155 !important;
-        border-bottom: 1px solid #334155 !important;
-        border-radius: 0px 0px 12px 12px !important;
-        background-color: #1E293B !important;
-        margin-bottom: 12px !important;
-        overflow: hidden !important;
-    }
+    /* Hide Streamlit default expander summary bar so only the clean card shows */
     div[data-testid="stExpander"] summary {
-        background-color: #162032 !important;
-        padding: 8px 14px !important;
-        font-size: 12px !important;
-        color: #93C5FD !important;
-        border-radius: 0px 0px 12px 12px !important;
+        display: none !important;
     }
-    div[data-testid="stExpander"] summary:hover {
-        background-color: #1e2d44 !important;
-    }
-    div[data-testid="stExpander"] div[role="region"] {
-        background-color: #0F172A !important;
-        padding: 12px !important;
-        border-top: 1px solid #334155 !important;
+    div[data-testid="stExpander"] {
+        border: none !important;
+        margin-top: -16px !important;
+        margin-bottom: 12px !important;
     }
 
     .badge-opt { background-color: #065F46; color: #6EE7B7; padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
@@ -363,7 +373,7 @@ HOME_GOAL = 26500.00
 goal_progress = min(total_cash / HOME_GOAL, 1.0)
 remaining_goal = max(HOME_GOAL - total_cash, 0.0)
 
-# Master categories list & $300/wk Lean Budget Targets
+# Categories Master List & Lean $300/wk Targets
 categories_list = [
     "Vehicle & Gas", "Housing & Rent", "Groceries & Food", 
     "Personal & Entertainment", "Dining Out & Coffee", 
@@ -551,7 +561,7 @@ def fetch_ai_insights_cached(net_cash, tot_cash, p_debt, b_debt, p_util, azeo_ca
     return f"💡 **Executive Snapshot:** Net liquid cash stands at \\${net_cash:,.2f} with credit utilization optimized at {p_util:.2f}%. Maintain {azeo_card} at ~\\$10 for your AZEO boost while clearing non-AZEO cards to \\$0."
 
 # ==========================================
-# 6. APP TABS & UI RENDERING
+# 6. APP TABS & RE-ORDERED UI RENDERING
 # ==========================================
 tabs = st.tabs([
     "⚡ Command Center", 
@@ -747,32 +757,33 @@ with tabs[0]:
                     st.error(f"❌ Write Error: {str(err)}\n{traceback.format_exc()}")
 
 # ------------------------------------------
-# TAB 2: ACCOUNTS & CREDIT HUB
+# TAB 2: ACCOUNTS & CREDIT HUB (CLICKABLE CARDS)
 # ------------------------------------------
 with tabs[1]:
     st.subheader("🏦 Cash & Checking Spread")
-    st.caption("All balances update live. Click any card below to open its ledger or record actions.")
     
     for acc in live_cash_registry:
         bal = acc["current_balance"]
         pct_of_total = (bal / total_cash) * 100 if total_cash > 0 else 0.0
         
         st.markdown(f"""
-        <div class="card-box">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{acc['name']}</span>
-                    <div style="font-size:12px; color:#94A3B8;">{acc['role']}</div>
+        <details class="card-container">
+            <summary>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{acc['name']}</span>
+                        <div style="font-size:12px; color:#94A3B8;">{acc['role']}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="font-weight:800; font-size:18px; color:#38BDF8;">${bal:,.2f}</span>
+                        <div style="font-size:11px; color:#64748B;">{pct_of_total:.1f}% of cash</div>
+                    </div>
                 </div>
-                <div style="text-align:right;">
-                    <span style="font-weight:800; font-size:18px; color:#38BDF8;">${bal:,.2f}</span>
-                    <div style="font-size:11px; color:#64748B;">{pct_of_total:.1f}% of cash</div>
-                </div>
-            </div>
-        </div>
+            </summary>
+        </details>
         """, unsafe_allow_html=True)
         
-        with st.expander("🔍 View Recent Activity & Quick Action", expanded=False):
+        with st.expander(" ", expanded=False):
             render_card_transactions(acc["name"])
             st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
             if st.button(f"⚡ Manage / Record on {acc['name']}", key=f"btn_bank_{acc['name']}"):
@@ -789,25 +800,27 @@ with tabs[1]:
         util = c["utilization"]
         
         st.markdown(f"""
-        <div class="card-box">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                <div>
-                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{c['name']}</span>
-                    <div style="font-size:12px; color:#64748B;">Limit: ${limit:,.0f} | Closes: {c['close_str']}</div>
+        <details class="card-container">
+            <summary>
+                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <div>
+                        <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{c['name']}</span>
+                        <div style="font-size:12px; color:#64748B;">Limit: ${limit:,.0f} | Closes: {c['close_str']}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="font-weight:800; font-size:18px; color:#F8FAFC;">${bal:.2f}</span>
+                        <span style="font-size:12px; font-weight:700; color:#94A3B8; margin-left:4px;">({util:.1f}%)</span>
+                    </div>
                 </div>
-                <div style="text-align:right;">
-                    <span style="font-weight:800; font-size:18px; color:#F8FAFC;">${bal:.2f}</span>
-                    <span style="font-size:12px; font-weight:700; color:#94A3B8; margin-left:4px;">({util:.1f}%)</span>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                    <span style="font-size:12px; color:#CBD5E1;">{c['action_text']}</span>
+                    <div>{c['badge_html']}</div>
                 </div>
-            </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-                <span style="font-size:12px; color:#CBD5E1;">{c['action_text']}</span>
-                <div>{c['badge_html']}</div>
-            </div>
-        </div>
+            </summary>
+        </details>
         """, unsafe_allow_html=True)
         
-        with st.expander("🔍 View Recent Activity & Quick Action", expanded=False):
+        with st.expander(" ", expanded=False):
             render_card_transactions(c["name"])
             st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
             if st.button(f"⚡ Manage / Record on {c['name']}", key=f"btn_card_{c['name']}"):
@@ -820,32 +833,35 @@ with tabs[1]:
     
     for c in live_biz_cc:
         bal = c["current_balance"]
+        
         st.markdown(f"""
-        <div class="card-box">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                <div>
-                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{c['name']}</span>
-                    <div style="font-size:12px; color:#64748B;">Business Card</div>
+        <details class="card-container">
+            <summary>
+                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <div>
+                        <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{c['name']}</span>
+                        <div style="font-size:12px; color:#64748B;">Business Card</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="font-weight:800; font-size:18px; color:#F8FAFC;">${bal:.2f}</span>
+                    </div>
                 </div>
-                <div style="text-align:right;">
-                    <span style="font-weight:800; font-size:18px; color:#F8FAFC;">${bal:.2f}</span>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                    <span style="font-size:12px; color:#CBD5E1;">Due: {c['due_str']} | Closes: {c['close_str']}</span>
+                    <div><span class="badge-biz">💼 BUSINESS</span></div>
                 </div>
-            </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-                <span style="font-size:12px; color:#CBD5E1;">Due: {c['due_str']} | Closes: {c['close_str']}</span>
-                <div><span class="badge-biz">💼 BUSINESS</span></div>
-            </div>
-        </div>
+            </summary>
+        </details>
         """, unsafe_allow_html=True)
         
-        with st.expander("🔍 View Recent Activity & Quick Action", expanded=False):
+        with st.expander(" ", expanded=False):
             render_card_transactions(c["name"])
             st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
             if st.button(f"⚡ Manage / Record on {c['name']}", key=f"btn_biz_{c['name']}"):
                 open_card_action_dialog(c["name"], bal)
 
 # ------------------------------------------
-# TAB 3: ANALYTICS & CHARTS (CIRCULAR PROGRESSION DONUT CHART)
+# TAB 3: ANALYTICS & CHARTS (HOLE = 0.55 DONUT ENGINE)
 # ------------------------------------------
 with tabs[2]:
     st.subheader("📊 Financial Analytics & Trends")
@@ -865,7 +881,7 @@ with tabs[2]:
     ref_date = st.session_state.current_analytics_date
     df_clean = df_tx.copy() if not df_tx.empty else pd.DataFrame()
 
-    # BLOCK 1: WEEKLY ANALYTICS (CIRCULAR SWEEP DONUT)
+    # BLOCK 1: WEEKLY ANALYTICS
     week_start = ref_date - timedelta(days=ref_date.weekday())
     week_end = week_start + timedelta(days=6)
 
@@ -903,7 +919,7 @@ with tabs[2]:
 
     w_exp_df = df_week[df_week["Type"] == "Expense"] if not df_week.empty else pd.DataFrame()
     
-    # BUILD WEEKLY RADIAL PROGRESSION DONUT
+    # RADIAL PROGRESSION DONUT DATA (WEEKLY)
     w_donut_labels = []
     w_donut_values = []
     w_donut_colors = []
@@ -913,15 +929,15 @@ with tabs[2]:
         spent_amt = w_exp_df[w_exp_df["Category"] == cat_name]["Amount"].sum() if not w_exp_df.empty else 0.0
         base_color = CATEGORY_COLORS.get(cat_name, "#3B82F6")
         
-        # 1. Spent Segment (Colored Arc from start of category)
+        # 1. Spent Segment
         spent_slice = min(spent_amt, budget_amt)
         if spent_slice > 0:
             w_donut_labels.append(f"{cat_name} (Spent)")
             w_donut_values.append(spent_slice)
             w_donut_colors.append(base_color)
-            w_donut_hovers.append(f"<b>{cat_name}</b><br>Spent: ${spent_amt:.2f} / ${budget_amt:.2f}<br>({(spent_amt/budget_amt*100):.1f}% of allocation)")
+            w_donut_hovers.append(f"<b>{cat_name}</b><br>Spent: ${spent_amt:.2f} / ${budget_amt:.2f}<br>({(spent_amt/budget_amt*100):.1f}% of weekly limit)")
         
-        # 2. Remaining Unspent Segment (Faded Dark Placeholder)
+        # 2. Remaining Unspent Segment
         unspent_slice = max(budget_amt - spent_amt, 0.0)
         if unspent_slice > 0:
             w_donut_labels.append(f"{cat_name} (Left)")
@@ -929,7 +945,7 @@ with tabs[2]:
             w_donut_colors.append("rgba(51, 65, 85, 0.35)")
             w_donut_hovers.append(f"<b>{cat_name}</b><br>Remaining: ${unspent_slice:.2f} of ${budget_amt:.2f} budget")
         
-        # 3. Overspend Extension (Alert Red)
+        # 3. Overspend Extension
         if spent_amt > budget_amt:
             over_slice = spent_amt - budget_amt
             w_donut_labels.append(f"{cat_name} (Over)")
@@ -937,7 +953,6 @@ with tabs[2]:
             w_donut_colors.append("#EF4444")
             w_donut_hovers.append(f"<b>{cat_name} OVER BUDGET</b><br>Over by: +${over_slice:.2f}")
 
-    # Catch Unbudgeted Expenses
     if not w_exp_df.empty:
         other_exp = w_exp_df[~w_exp_df["Category"].isin(WEEKLY_BUDGET_TARGETS.keys())]
         unbudgeted_amt = other_exp["Amount"].sum()
@@ -976,7 +991,7 @@ with tabs[2]:
 
     st.divider()
 
-    # BLOCK 2: MONTHLY ANALYTICS (PRO-RATED RADIAL PROGRESSION DONUT)
+    # BLOCK 2: MONTHLY ANALYTICS (HOLE = 0.55 DONUT)
     m_year, m_month = ref_date.year, ref_date.month
     month_start = date(m_year, m_month, 1)
     month_end = date(m_year, m_month, calendar.monthrange(m_year, m_month)[1])
@@ -1023,7 +1038,7 @@ with tabs[2]:
 
     m_exp_df = df_month[df_month["Type"] == "Expense"] if not df_month.empty else pd.DataFrame()
     
-    # BUILD MONTHLY RADIAL PROGRESSION DONUT
+    # RADIAL PROGRESSION DONUT DATA (MONTHLY)
     m_donut_labels = []
     m_donut_values = []
     m_donut_colors = []
