@@ -360,9 +360,9 @@ biz_cc_debt = sum(c["current_balance"] for c in live_biz_cc)
 total_all_debt = personal_cc_debt + biz_cc_debt
 net_liquid_cash = total_cash - total_all_debt
 
-HOME_GOAL = 26500.00[cite: 1]
-goal_progress = min(total_cash / HOME_GOAL, 1.0)[cite: 1]
-remaining_goal = max(HOME_GOAL - total_cash, 0.0)[cite: 1]
+HOME_GOAL = 26500.00
+goal_progress = min(total_cash / HOME_GOAL, 1.0)
+remaining_goal = max(HOME_GOAL - total_cash, 0.0)
 
 # Master categories list & $300/wk Lean Budget Targets
 categories_list = [
