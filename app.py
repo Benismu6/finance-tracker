@@ -112,7 +112,7 @@ st.markdown("""
         box-shadow: 0 2px 6px rgba(37,99,235,0.4);
     }
 
-    /* ZERO-GAP CLICKABLE CARD CONTAINER */
+    /* ZERO-GAP NATIVE ACCORDION CONTAINERS */
     details.card-container {
         background-color: #1E293B;
         border: 1px solid #334155;
@@ -234,9 +234,14 @@ def get_ledger_data():
 
 df_tx = get_ledger_data()
 
+# 1. CASH & CHECKING SPREAD REGISTRY
 cash_registry_def = [
     {"name": "BofA 5522", "role": "Primary Operating Checking", "base": 251.67},
-    {"name": "SECU 4987", "role": "Dedicated Home Savings / HYSA", "base": 4212.10}
+    {"name": "BofA 3881", "role": "BofA Secondary Savings", "base": 0.00},
+    {"name": "SECU 4987", "role": "SECU Primary Checking", "base": 4212.10},
+    {"name": "SECU 4979", "role": "Dedicated Home Savings / HYSA", "base": 0.00},
+    {"name": "SoFi 3854", "role": "SoFi Primary Checking", "base": 0.00},
+    {"name": "SoFi 4777", "role": "SoFi High-Yield Savings", "base": 0.00}
 ]
 
 live_cash_registry = []
@@ -253,6 +258,7 @@ for acc in cash_registry_def:
 
 total_cash = sum(c["current_balance"] for c in live_cash_registry)
 
+# 2. CREDIT CARD REGISTRIES
 personal_cc_definitions = [
     {"name": "Chase 1993", "base": 517.70, "limit": 10600.00, "due_day": 1, "close_day": 4, "is_primary": True},
     {"name": "Chase 2207", "base": 9.52, "limit": 4900.00, "due_day": 1, "close_day": 4},
@@ -354,11 +360,11 @@ biz_cc_debt = sum(c["current_balance"] for c in live_biz_cc)
 total_all_debt = personal_cc_debt + biz_cc_debt
 net_liquid_cash = total_cash - total_all_debt
 
-HOME_GOAL = 26500.00
-goal_progress = min(total_cash / HOME_GOAL, 1.0)
-remaining_goal = max(HOME_GOAL - total_cash, 0.0)
+HOME_GOAL = 26500.00[cite: 1]
+goal_progress = min(total_cash / HOME_GOAL, 1.0)[cite: 1]
+remaining_goal = max(HOME_GOAL - total_cash, 0.0)[cite: 1]
 
-# Categories Master List & Lean $300/wk Targets
+# Master categories list & $300/wk Lean Budget Targets
 categories_list = [
     "Vehicle & Gas", "Housing & Rent", "Groceries & Food", 
     "Personal & Entertainment", "Dining Out & Coffee", 
@@ -388,7 +394,7 @@ CATEGORY_COLORS = {
 }
 
 # ==========================================
-# 4. CARD HTML RENDERING HELPERS (UNINDENTED FOR CLEAN MARKDOWN)
+# 4. CARD HTML RENDERING HELPERS
 # ==========================================
 def get_tx_rows_html(acc_name):
     if not df_tx.empty and "Account" in df_tx.columns:
@@ -474,7 +480,20 @@ account_dropdown = [
     "Apple 1765",
     "TJX",
     "BofA 5522 (Checking)",
-    "SECU 4987 (Savings / Home Fund)"
+    "BofA 3881 (Savings)",
+    "SECU 4987 (Checking)",
+    "SECU 4979 (Savings / Home Fund)",
+    "SoFi 3854 (Checking)",
+    "SoFi 4777 (Savings)"
+]
+
+deposit_accounts_dropdown = [
+    "BofA 5522 (Checking)",
+    "BofA 3881 (Savings)",
+    "SECU 4987 (Checking)",
+    "SECU 4979 (Savings / Home Fund)",
+    "SoFi 3854 (Checking)",
+    "SoFi 4777 (Savings)"
 ]
 
 # ------------------------------------------
@@ -535,7 +554,7 @@ with tabs[0]:
     with tab_inc:
         with st.form("log_income_form", clear_on_submit=True):
             inc_amt = st.number_input("Amount ($)", min_value=0.01, step=1.00, format="%.2f", key="f_inc_amt")
-            inc_acc = st.selectbox("Deposit Into", ["BofA 5522 (Checking)", "SECU 4987 (Savings / Home Fund)"], key="f_inc_acc")
+            inc_acc = st.selectbox("Deposit Into", deposit_accounts_dropdown, key="f_inc_acc")
             inc_cat = st.selectbox("Income Source", ["W2 Salary", "Uber Income", "Other Income"], key="f_inc_cat")
             inc_desc = st.text_input("Payer / Source", placeholder="e.g. Employer Payroll, Uber Payout", key="f_inc_desc")
             inc_item = st.text_input("Income Memo (Optional)", placeholder="e.g. Weekend boost", key="f_inc_item")
@@ -545,7 +564,7 @@ with tabs[0]:
                 clean_inc_acc = inc_acc.split(" (")[0]
                 tx_id = f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}"
                 date_str = inc_date.strftime("%Y-%m-%d")
-                goal = "Baltimore 1st Home" if "SECU" in clean_inc_acc else "General Living"
+                goal = "Baltimore 1st Home" if "4979" in clean_inc_acc or "SECU" in clean_inc_acc else "General Living"
                 
                 new_row_values = [
                     tx_id,
@@ -586,7 +605,7 @@ with tabs[0]:
                 format="%.2f", 
                 key="f_pay_amt"
             )
-            from_account = st.selectbox("Paid From", ["BofA 5522 (Checking)", "SECU 4987 (Savings)"], key="f_pay_from")
+            from_account = st.selectbox("Paid From", deposit_accounts_dropdown, key="f_pay_from")
             pay_item = st.text_input("Payment Memo (Optional)", placeholder="e.g. Statement balance payoff", key="f_pay_item")
             pay_date = st.date_input("Date", value=datetime.today(), key="f_pay_date")
             
@@ -997,7 +1016,7 @@ with tabs[4]:
         You are an elite, highly knowledgeable personal financial advisor and real estate strategist assisting the user.
         Today's date is {today_dt.strftime('%B %d, %Y')}.
         You have direct access to their live financial snapshot:
-        - Total Cash on Hand: ${total_cash:,.2f} (BofA Checking: ${live_cash_registry[0]['current_balance']:,.2f}, SECU HYSA Home Fund: ${live_cash_registry[1]['current_balance']:,.2f})
+        - Total Cash on Hand: ${total_cash:,.2f} across checking and savings accounts.
         - Total Personal CC Debt: ${personal_cc_debt:,.2f} across ${personal_cc_limit:,.2f} limit (Overall Util: {personal_utilization:.2f}%)
         - Business CC Debt: ${biz_cc_debt:,.2f} (Chase 0431)
         - Net Liquid Cash: ${net_liquid_cash:,.2f}
