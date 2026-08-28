@@ -637,7 +637,13 @@ with tabs[0]:
 # TAB 2: ACCOUNTS & CREDIT HUB (ZERO GAP NATIVE HTML)
 # ------------------------------------------
 with tabs[1]:
-    st.subheader("🏦 Cash & Checking Spread")
+    # Section Header with Right-Aligned Total Cash
+    st.markdown(f"""
+    <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:12px;">
+        <h3 style="margin:0; font-size:1.25rem; font-weight:700; color:#F8FAFC;">🏦 Cash & Checking Spread</h3>
+        <span style="font-size:1.15rem; font-weight:800; color:#38BDF8;">${total_cash:,.2f}</span>
+    </div>
+    """, unsafe_allow_html=True)
     
     for acc in live_cash_registry:
         bal = acc["current_balance"]
