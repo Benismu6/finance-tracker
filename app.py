@@ -112,7 +112,6 @@ st.markdown("""
         box-shadow: 0 2px 6px rgba(37,99,235,0.4);
     }
 
-    /* ZERO-GAP NATIVE ACCORDION CONTAINERS */
     details.card-container {
         background-color: #1E293B;
         border: 1px solid #334155;
@@ -189,11 +188,11 @@ def get_prev_recurring_date(target_day: int, ref_date: date) -> date:
         return date(prev_y, prev_m, min(target_day, max_d_prev))
 
 # ==========================================
-# 3. DIRECT GSHEETS CONNECTION & DYNAMIC LEDGER
+# 3. GSHEETS BACKEND (LEDGER & ACCOUNTS REGISTRY)
 # ==========================================
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-def append_tx_to_sheet(row_values):
+def get_authorized_gspread():
     gs_secrets = dict(st.secrets["connections"]["gsheets"])
     sa_keys = [
         "type", "project_id", "private_key_id", "private_key",
@@ -201,21 +200,28 @@ def append_tx_to_sheet(row_values):
         "auth_provider_x509_cert_url", "client_x509_cert_url"
     ]
     service_account_info = {k: gs_secrets[k] for k in sa_keys if k in gs_secrets}
-    
     if "private_key" in service_account_info:
         service_account_info["private_key"] = service_account_info["private_key"].replace("\\n", "\n")
 
-    scopes = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ]
-    
+    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     credentials = Credentials.from_service_account_info(service_account_info, scopes=scopes)
     gc = gspread.authorize(credentials)
-    
-    sheet_url = gs_secrets["spreadsheet"]
+    return gc, gs_secrets["spreadsheet"]
+
+def append_tx_to_sheet(row_values):
+    gc, sheet_url = get_authorized_gspread()
     spreadsheet = gc.open_by_url(sheet_url)
     worksheet = spreadsheet.worksheet("Master_Transactions")
+    worksheet.append_row(row_values, value_input_option="USER_ENTERED")
+
+def append_account_to_sheet(row_values):
+    gc, sheet_url = get_authorized_gspread()
+    spreadsheet = gc.open_by_url(sheet_url)
+    try:
+        worksheet = spreadsheet.worksheet("Accounts_Master")
+    except Exception:
+        worksheet = spreadsheet.add_worksheet(title="Accounts_Master", rows=50, cols=10)
+        worksheet.append_row(["Account_Name", "Account_Type", "Role_Or_Memo", "Base_Balance", "Credit_Limit", "Due_Day", "Close_Day"])
     worksheet.append_row(row_values, value_input_option="USER_ENTERED")
 
 def get_ledger_data():
@@ -232,65 +238,87 @@ def get_ledger_data():
         "Merchant", "Amount", "Goal_Tag", "Item_Description", "Notes"
     ])
 
+def get_accounts_registry():
+    try:
+        df_acc = conn.read(worksheet="Accounts_Master", ttl="0")
+        if df_acc is not None and not df_acc.empty:
+            df_acc["Base_Balance"] = pd.to_numeric(df_acc["Base_Balance"], errors="coerce").fillna(0.0)
+            df_acc["Credit_Limit"] = pd.to_numeric(df_acc["Credit_Limit"], errors="coerce").fillna(0.0)
+            df_acc["Due_Day"] = pd.to_numeric(df_acc["Due_Day"], errors="coerce").fillna(1).astype(int)
+            df_acc["Close_Day"] = pd.to_numeric(df_acc["Close_Day"], errors="coerce").fillna(4).astype(int)
+            return df_acc
+    except Exception:
+        pass
+    return pd.DataFrame([
+        {"Account_Name": "BofA 5522", "Account_Type": "Cash / Bank", "Role_Or_Memo": "Primary Operating Checking", "Base_Balance": 251.67, "Credit_Limit": 0, "Due_Day": 0, "Close_Day": 0},
+        {"Account_Name": "BofA 3881", "Account_Type": "Cash / Bank", "Role_Or_Memo": "BofA Secondary Savings", "Base_Balance": 0.00, "Credit_Limit": 0, "Due_Day": 0, "Close_Day": 0},
+        {"Account_Name": "SECU 4987", "Account_Type": "Cash / Bank", "Role_Or_Memo": "SECU Primary Checking", "Base_Balance": 4212.10, "Credit_Limit": 0, "Due_Day": 0, "Close_Day": 0},
+        {"Account_Name": "SECU 4979", "Account_Type": "Cash / Bank", "Role_Or_Memo": "Dedicated Home Savings / HYSA", "Base_Balance": 0.00, "Credit_Limit": 0, "Due_Day": 0, "Close_Day": 0},
+        {"Account_Name": "SoFi 3854", "Account_Type": "Cash / Bank", "Role_Or_Memo": "SoFi Primary Checking", "Base_Balance": 0.00, "Credit_Limit": 0, "Due_Day": 0, "Close_Day": 0},
+        {"Account_Name": "SoFi 4777", "Account_Type": "Cash / Bank", "Role_Or_Memo": "SoFi High-Yield Savings", "Base_Balance": 0.00, "Credit_Limit": 0, "Due_Day": 0, "Close_Day": 0},
+        {"Account_Name": "Chase 1993", "Account_Type": "Personal CC", "Role_Or_Memo": "Primary Daily", "Base_Balance": 517.70, "Credit_Limit": 10600.00, "Due_Day": 1, "Close_Day": 4},
+        {"Account_Name": "Chase 2207", "Account_Type": "Personal CC", "Role_Or_Memo": "AZEO 1%", "Base_Balance": 9.52, "Credit_Limit": 4900.00, "Due_Day": 1, "Close_Day": 4},
+        {"Account_Name": "BofA 5309", "Account_Type": "Personal CC", "Role_Or_Memo": "Buffer Card", "Base_Balance": 22.21, "Credit_Limit": 7500.00, "Due_Day": 24, "Close_Day": 27},
+        {"Account_Name": "BofA 7197", "Account_Type": "Personal CC", "Role_Or_Memo": "Buffer Card", "Base_Balance": 37.12, "Credit_Limit": 3500.00, "Due_Day": 24, "Close_Day": 27},
+        {"Account_Name": "Apple 1765", "Account_Type": "Personal CC", "Role_Or_Memo": "Digital Wallet", "Base_Balance": 0.00, "Credit_Limit": 2000.00, "Due_Day": -1, "Close_Day": 3},
+        {"Account_Name": "TJX", "Account_Type": "Personal CC", "Role_Or_Memo": "Retail Card", "Base_Balance": 0.00, "Credit_Limit": 3200.00, "Due_Day": 5, "Close_Day": 8},
+        {"Account_Name": "Chase 0431", "Account_Type": "Business CC", "Role_Or_Memo": "Business CC", "Base_Balance": 505.07, "Credit_Limit": 0.00, "Due_Day": 1, "Close_Day": 7}
+    ])
+
 df_tx = get_ledger_data()
+df_registry = get_accounts_registry()
 
-# 1. CASH & CHECKING SPREAD REGISTRY
-cash_registry_def = [
-    {"name": "BofA 5522", "role": "Primary Operating Checking", "base": 251.67},
-    {"name": "BofA 3881", "role": "BofA Secondary Savings", "base": 0.00},
-    {"name": "SECU 4987", "role": "SECU Primary Checking", "base": 4212.10},
-    {"name": "SECU 4979", "role": "Dedicated Home Savings / HYSA", "base": 0.00},
-    {"name": "SoFi 3854", "role": "SoFi Primary Checking", "base": 0.00},
-    {"name": "SoFi 4777", "role": "SoFi High-Yield Savings", "base": 0.00}
-]
-
+# 1. DYNAMIC CASH BALANCES
 live_cash_registry = []
-for acc in cash_registry_def:
-    a_name = acc["name"]
+cash_df = df_registry[df_registry["Account_Type"] == "Cash / Bank"]
+
+for _, acc in cash_df.iterrows():
+    a_name = acc["Account_Name"]
+    base_val = float(acc["Base_Balance"])
     inc_val = df_tx[(df_tx["Account"] == a_name) & (df_tx["Type"] == "Income")]["Amount"].sum()
     exp_val = df_tx[(df_tx["Account"] == a_name) & (df_tx["Type"] == "Expense")]["Amount"].sum()
     cc_paid_out = df_tx[(df_tx["Type"] == "CC Payment") & (df_tx["Merchant"].str.contains(a_name, na=False))]["Amount"].sum()
     
-    current_cash = acc["base"] + inc_val - exp_val - cc_paid_out
-    acc_dict = dict(acc)
-    acc_dict["current_balance"] = max(current_cash, 0.0)
-    live_cash_registry.append(acc_dict)
+    current_cash = base_val + inc_val - exp_val - cc_paid_out
+    live_cash_registry.append({
+        "name": a_name,
+        "role": acc["Role_Or_Memo"],
+        "base": base_val,
+        "current_balance": max(current_cash, 0.0)
+    })
 
 total_cash = sum(c["current_balance"] for c in live_cash_registry)
 
-# 2. CREDIT CARD REGISTRIES
-personal_cc_definitions = [
-    {"name": "Chase 1993", "base": 517.70, "limit": 10600.00, "due_day": 1, "close_day": 4, "is_primary": True},
-    {"name": "Chase 2207", "base": 9.52, "limit": 4900.00, "due_day": 1, "close_day": 4},
-    {"name": "BofA 5309", "base": 22.21, "limit": 7500.00, "due_day": 24, "close_day": 27},
-    {"name": "BofA 7197", "base": 37.12, "limit": 3500.00, "due_day": 24, "close_day": 27},
-    {"name": "Apple 1765", "base": 0.00, "limit": 2000.00, "due_day": -1, "close_day": 3},
-    {"name": "TJX", "base": 0.00, "limit": 3200.00, "due_day": 5, "close_day": 8}
-]
-
-biz_cc_definitions = [
-    {"name": "Chase 0431", "base": 505.07, "limit": 0.00, "due_day": 1, "close_day": 7, "is_business": True}
-]
-
+# 2. DYNAMIC PERSONAL CC BALANCES
 raw_personal_cards = []
-for card in personal_cc_definitions:
-    c_name = card["name"]
-    last_close = get_prev_recurring_date(card["close_day"], today_dt)
-    next_due = get_next_recurring_date(card["due_day"], today_dt)
-    next_close = get_next_recurring_date(card["close_day"], today_dt)
+p_cc_df = df_registry[df_registry["Account_Type"] == "Personal CC"]
+
+for _, card in p_cc_df.iterrows():
+    c_name = card["Account_Name"]
+    base_bal = float(card["Base_Balance"])
+    limit_bal = float(card["Credit_Limit"])
+    due_d = int(card["Due_Day"])
+    close_d = int(card["Close_Day"])
+    
+    last_close = get_prev_recurring_date(close_d, today_dt)
+    next_due = get_next_recurring_date(due_d, today_dt)
+    next_close = get_next_recurring_date(close_d, today_dt)
     
     spent_all = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "Expense")]["Amount"].sum()
     paid_all = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "CC Payment")]["Amount"].sum()
-    current_live_bal = max(card["base"] + spent_all - paid_all, 0.0)
+    current_live_bal = max(base_bal + spent_all - paid_all, 0.0)
     
     charges_prior = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "Expense") & (df_tx["Date_DT"] <= last_close)]["Amount"].sum()
-    stmt_balance_billed = max(card["base"] + charges_prior - paid_all, 0.0)
+    stmt_balance_billed = max(base_bal + charges_prior - paid_all, 0.0)
     
     raw_personal_cards.append({
-        **card,
+        "name": c_name,
+        "base": base_bal,
+        "limit": limit_bal,
+        "due_day": due_d,
+        "close_day": close_d,
         "current_balance": current_live_bal,
         "stmt_due": stmt_balance_billed,
-        "last_close": last_close,
         "next_due": next_due,
         "next_close": next_close
     })
@@ -308,10 +336,8 @@ for c in raw_personal_cards:
     stmt_due = c["stmt_due"]
     next_due = c["next_due"]
     next_close = c["next_close"]
-    pay_by_date = next_due - timedelta(days=1)
     
     is_azeo = (c_name == azeo_card_name)
-    
     if stmt_due > 0.01:
         badge_html = '<span style="background-color:#7C2D12;color:#FDBA74;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;">⚠️ STMT DUE</span>'
         action_text = f"Pay ${stmt_due:.2f} stmt balance by {next_due.strftime('%b %d')}"
@@ -334,23 +360,31 @@ for c in raw_personal_cards:
     card_dict["badge_html"] = badge_html
     live_personal_cc.append(card_dict)
 
+# 3. DYNAMIC BUSINESS CC BALANCES
 live_biz_cc = []
-for card in biz_cc_definitions:
-    c_name = card["name"]
+b_cc_df = df_registry[df_registry["Account_Type"] == "Business CC"]
+
+for _, card in b_cc_df.iterrows():
+    c_name = card["Account_Name"]
+    base_bal = float(card["Base_Balance"])
+    due_d = int(card["Due_Day"])
+    close_d = int(card["Close_Day"])
+    
     spent = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "Expense")]["Amount"].sum()
     paid = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "CC Payment")]["Amount"].sum()
-    current_bal = max(card["base"] + spent - paid, 0.0)
+    current_bal = max(base_bal + spent - paid, 0.0)
     
-    next_due = get_next_recurring_date(card["due_day"], today_dt)
-    next_close = get_next_recurring_date(card["close_day"], today_dt)
+    next_due = get_next_recurring_date(due_d, today_dt)
+    next_close = get_next_recurring_date(close_d, today_dt)
     pay_by_date = next_due - timedelta(days=1)
     
-    card_dict = dict(card)
-    card_dict["current_balance"] = current_bal
-    card_dict["due_str"] = next_due.strftime("%b %d")
-    card_dict["close_str"] = next_close.strftime("%b %d")
-    card_dict["pay_by_str"] = f"By {pay_by_date.strftime('%b %d')}"
-    live_biz_cc.append(card_dict)
+    live_biz_cc.append({
+        "name": c_name,
+        "current_balance": current_bal,
+        "due_str": next_due.strftime("%b %d"),
+        "close_str": next_close.strftime("%b %d"),
+        "pay_by_str": f"By {pay_by_date.strftime('%b %d')}"
+    })
 
 personal_cc_debt = sum(c["current_balance"] for c in live_personal_cc)
 personal_cc_limit = sum(c["limit"] for c in live_personal_cc)
@@ -364,7 +398,7 @@ HOME_GOAL = 26500.00
 goal_progress = min(total_cash / HOME_GOAL, 1.0)
 remaining_goal = max(HOME_GOAL - total_cash, 0.0)
 
-# Master categories list & $300/wk Lean Budget Targets
+# Categories Master List & Lean $300/wk Targets
 categories_list = [
     "Vehicle & Gas", "Housing & Rent", "Groceries & Food", 
     "Personal & Entertainment", "Dining Out & Coffee", 
@@ -429,7 +463,47 @@ def render_account_card(title, subtitle, right_val, right_sub, extra_left="", ex
     st.markdown(card_html, unsafe_allow_html=True)
 
 # ==========================================
-# 5. AI EXECUTIVE SUMMARY & KEY FETCHER
+# 5. DYNAMIC NEW ACCOUNT MODAL
+# ==========================================
+@st.dialog("➕ Add New Account to Registry")
+def open_new_account_dialog():
+    st.caption("Register a new account or credit card. It will automatically update in Google Sheets and sync into your app.")
+    with st.form("new_account_form", clear_on_submit=True):
+        new_acc_name = st.text_input("Account Identifier (e.g. Chase 5432, Capital One 1122)", placeholder="Card or Bank Name")
+        new_acc_type = st.selectbox("Account Type", ["Cash / Bank", "Personal CC", "Business CC"])
+        new_acc_role = st.text_input("Role / Memo (e.g. Dining Card, HYSA)", placeholder="Brief description")
+        new_acc_base = st.number_input("Starting Base Balance ($)", min_value=0.00, step=10.00, format="%.2f")
+        
+        col_c1, col_c2, col_c3 = st.columns(3)
+        with col_c1:
+            new_limit = st.number_input("Credit Limit ($)", min_value=0.00, step=100.00, format="%.2f")
+        with col_c2:
+            new_due = st.number_input("Due Day of Month", min_value=-1, max_value=31, value=1)
+        with col_c3:
+            new_close = st.number_input("Statement Close Day", min_value=1, max_value=31, value=4)
+            
+        if st.form_submit_button("Save Account"):
+            if not new_acc_name.strip():
+                st.error("Please provide an account name.")
+            else:
+                row = [
+                    new_acc_name.strip(),
+                    new_acc_type,
+                    new_acc_role.strip(),
+                    float(new_acc_base),
+                    float(new_limit) if new_acc_type != "Cash / Bank" else 0.0,
+                    int(new_due) if new_acc_type != "Cash / Bank" else 0,
+                    int(new_close) if new_acc_type != "Cash / Bank" else 0
+                ]
+                try:
+                    append_account_to_sheet(row)
+                    st.success(f"✅ Added {new_acc_name} to Accounts_Master!")
+                    st.rerun()
+                except Exception as err:
+                    st.error(f"Error saving account: {err}")
+
+# ==========================================
+# 6. AI EXECUTIVE SUMMARY & KEY FETCHER
 # ==========================================
 def get_gemini_api_key():
     if "GEMINI_API_KEY" in st.secrets:
@@ -461,7 +535,7 @@ def fetch_ai_insights_cached(net_cash, tot_cash, p_debt, b_debt, p_util, azeo_ca
     return f"💡 **Executive Snapshot:** Net liquid cash stands at \\${net_cash:,.2f} with credit utilization optimized at {p_util:.2f}%. Maintain {azeo_card} at ~\\$10 for your AZEO boost while clearing non-AZEO cards to \\$0."
 
 # ==========================================
-# 6. APP TABS & UI RENDERING
+# 7. APP TABS & UI RENDERING
 # ==========================================
 tabs = st.tabs([
     "⚡ Command Center", 
@@ -471,30 +545,9 @@ tabs = st.tabs([
     "💬 AI Advisor"
 ])
 
-account_dropdown = [
-    "Chase 1993 (Primary Daily)",
-    "Chase 0431 (Business CC)",
-    "Chase 2207 (AZEO 1%)",
-    "BofA 5309",
-    "BofA 7197",
-    "Apple 1765",
-    "TJX",
-    "BofA 5522 (Checking)",
-    "BofA 3881 (Savings)",
-    "SECU 4987 (Checking)",
-    "SECU 4979 (Savings / Home Fund)",
-    "SoFi 3854 (Checking)",
-    "SoFi 4777 (Savings)"
-]
-
-deposit_accounts_dropdown = [
-    "BofA 5522 (Checking)",
-    "BofA 3881 (Savings)",
-    "SECU 4987 (Checking)",
-    "SECU 4979 (Savings / Home Fund)",
-    "SoFi 3854 (Checking)",
-    "SoFi 4777 (Savings)"
-]
+# Dynamic dropdown lists built straight from registry
+all_account_names = list(df_registry["Account_Name"])
+deposit_accounts = list(df_registry[df_registry["Account_Type"] == "Cash / Bank"]["Account_Name"])
 
 # ------------------------------------------
 # TAB 1: COMMAND CENTER
@@ -520,7 +573,7 @@ with tabs[0]:
     with tab_exp:
         with st.form("log_expense_form", clear_on_submit=True):
             amt = st.number_input("Amount ($)", min_value=0.01, step=1.00, format="%.2f", key="f_exp_amt")
-            selected_acc = st.selectbox("Card / Account", account_dropdown, key="f_exp_acc")
+            selected_acc = st.selectbox("Card / Account", all_account_names, key="f_exp_acc")
             selected_cat = st.selectbox("Category", categories_list, key="f_exp_cat")
             vendor = st.text_input("Merchant / Store", placeholder="e.g. Amazon, Shell, Trader Joe's", key="f_exp_ven")
             item_desc = st.text_input("Item Description (Optional)", placeholder="e.g. Phone case, Work lunch", key="f_exp_item")
@@ -528,14 +581,13 @@ with tabs[0]:
             goal_tag = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"], key="f_exp_gt")
             
             if st.form_submit_button("Record Expense"):
-                clean_acc = selected_acc.split(" (")[0]
                 tx_id = f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}"
                 date_str = entry_date.strftime("%Y-%m-%d")
                 
                 new_row_values = [
                     tx_id,
                     date_str,
-                    clean_acc,
+                    selected_acc,
                     "Expense",
                     selected_cat,
                     vendor,
@@ -546,7 +598,7 @@ with tabs[0]:
                 ]
                 try:
                     append_tx_to_sheet(new_row_values)
-                    st.success(f"✅ Successfully written: ${amt:.2f} to {selected_cat} on {clean_acc}!")
+                    st.success(f"✅ Successfully written: ${amt:.2f} to {selected_cat} on {selected_acc}!")
                     st.rerun()
                 except Exception as err:
                     st.error(f"❌ Write Error: {str(err)}\n{traceback.format_exc()}")
@@ -554,22 +606,21 @@ with tabs[0]:
     with tab_inc:
         with st.form("log_income_form", clear_on_submit=True):
             inc_amt = st.number_input("Amount ($)", min_value=0.01, step=1.00, format="%.2f", key="f_inc_amt")
-            inc_acc = st.selectbox("Deposit Into", deposit_accounts_dropdown, key="f_inc_acc")
+            inc_acc = st.selectbox("Deposit Into", deposit_accounts, key="f_inc_acc")
             inc_cat = st.selectbox("Income Source", ["W2 Salary", "Uber Income", "Other Income"], key="f_inc_cat")
             inc_desc = st.text_input("Payer / Source", placeholder="e.g. Employer Payroll, Uber Payout", key="f_inc_desc")
             inc_item = st.text_input("Income Memo (Optional)", placeholder="e.g. Weekend boost", key="f_inc_item")
             inc_date = st.date_input("Date", value=datetime.today(), key="f_inc_date")
             
             if st.form_submit_button("Record Income"):
-                clean_inc_acc = inc_acc.split(" (")[0]
                 tx_id = f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}"
                 date_str = inc_date.strftime("%Y-%m-%d")
-                goal = "Baltimore 1st Home" if "4979" in clean_inc_acc or "SECU" in clean_inc_acc else "General Living"
+                goal = "Baltimore 1st Home" if "4979" in inc_acc or "SECU" in inc_acc else "General Living"
                 
                 new_row_values = [
                     tx_id,
                     date_str,
-                    clean_inc_acc,
+                    inc_acc,
                     "Income",
                     inc_cat,
                     inc_desc,
@@ -580,7 +631,7 @@ with tabs[0]:
                 ]
                 try:
                     append_tx_to_sheet(new_row_values)
-                    st.success(f"✅ Logged ${inc_amt:.2f} {inc_cat} into {clean_inc_acc}!")
+                    st.success(f"✅ Logged ${inc_amt:.2f} {inc_cat} into {inc_acc}!")
                     st.rerun()
                 except Exception as err:
                     st.error(f"❌ Write Error: {str(err)}\n{traceback.format_exc()}")
@@ -605,12 +656,11 @@ with tabs[0]:
                 format="%.2f", 
                 key="f_pay_amt"
             )
-            from_account = st.selectbox("Paid From", deposit_accounts_dropdown, key="f_pay_from")
+            from_account = st.selectbox("Paid From", deposit_accounts, key="f_pay_from")
             pay_item = st.text_input("Payment Memo (Optional)", placeholder="e.g. Statement balance payoff", key="f_pay_item")
             pay_date = st.date_input("Date", value=datetime.today(), key="f_pay_date")
             
             if st.form_submit_button("Record CC Payment"):
-                clean_from = from_account.split(" (")[0]
                 tx_id = f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}"
                 date_str = pay_date.strftime("%Y-%m-%d")
                 
@@ -620,7 +670,7 @@ with tabs[0]:
                     target_card,
                     "CC Payment",
                     "CC Payment",
-                    f"Paid from {clean_from}",
+                    f"Paid from {from_account}",
                     float(pay_amt),
                     "General Living",
                     pay_item,
@@ -634,17 +684,21 @@ with tabs[0]:
                     st.error(f"❌ Write Error: {str(err)}\n{traceback.format_exc()}")
 
 # ------------------------------------------
-# TAB 2: ACCOUNTS & CREDIT HUB (ZERO GAP NATIVE HTML)
+# TAB 2: ACCOUNTS & CREDIT HUB
 # ------------------------------------------
 with tabs[1]:
-    # Section Header with Right-Aligned Total Cash
-    st.markdown(f"""
-    <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:12px;">
-        <h3 style="margin:0; font-size:1.25rem; font-weight:700; color:#F8FAFC;">🏦 Cash & Checking Spread</h3>
-        <span style="font-size:1.15rem; font-weight:800; color:#38BDF8;">${total_cash:,.2f}</span>
-    </div>
-    """, unsafe_allow_html=True)
-    
+    col_h1, col_h2 = st.columns([3, 1])
+    with col_h1:
+        st.markdown(f"""
+        <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:12px;">
+            <h3 style="margin:0; font-size:1.25rem; font-weight:700; color:#F8FAFC;">🏦 Cash & Checking Spread</h3>
+            <span style="font-size:1.15rem; font-weight:800; color:#38BDF8;">${total_cash:,.2f}</span>
+        </div>
+        """, unsafe_allow_html=True)
+    with col_h2:
+        if st.button("➕ Add Account", key="btn_open_add_account"):
+            open_new_account_dialog()
+
     for acc in live_cash_registry:
         bal = acc["current_balance"]
         pct_of_total = (bal / total_cash) * 100 if total_cash > 0 else 0.0
@@ -1060,7 +1114,7 @@ with tabs[4]:
             st.session_state.chat_messages.append({"role": "assistant", "content": bot_reply})
 
 # ==========================================
-# 7. ASYNC POPULATE SUMMARY PLACEHOLDER
+# 8. ASYNC POPULATE SUMMARY PLACEHOLDER
 # ==========================================
 unpaid_stmt_list = [f"{c['name']} (${c['stmt_due']:.2f})" for c in live_personal_cc if c.get('stmt_due', 0) > 0.01]
 unpaid_stmt_str = ", ".join(unpaid_stmt_list)
