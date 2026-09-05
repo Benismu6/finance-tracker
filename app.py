@@ -112,6 +112,7 @@ st.markdown("""
         box-shadow: 0 2px 6px rgba(37,99,235,0.4);
     }
 
+    /* ZERO-GAP NATIVE ACCORDION CONTAINERS */
     details.card-container {
         background-color: #1E293B;
         border: 1px solid #334155;
@@ -214,6 +215,12 @@ def append_tx_to_sheet(row_values):
     worksheet = spreadsheet.worksheet("Master_Transactions")
     worksheet.append_row(row_values, value_input_option="USER_ENTERED")
 
+def append_multiple_tx_to_sheet(rows_list):
+    gc, sheet_url = get_authorized_gspread()
+    spreadsheet = gc.open_by_url(sheet_url)
+    worksheet = spreadsheet.worksheet("Master_Transactions")
+    worksheet.append_rows(rows_list, value_input_option="USER_ENTERED")
+
 def append_account_to_sheet(row_values):
     gc, sheet_url = get_authorized_gspread()
     spreadsheet = gc.open_by_url(sheet_url)
@@ -268,7 +275,7 @@ def get_accounts_registry():
 df_tx = get_ledger_data()
 df_registry = get_accounts_registry()
 
-# 1. DYNAMIC CASH BALANCES
+# 1. DYNAMIC CASH BALANCES (WITH TRANSFERS INCLUDED)
 live_cash_registry = []
 cash_df = df_registry[df_registry["Account_Type"] == "Cash / Bank"]
 
@@ -279,7 +286,11 @@ for _, acc in cash_df.iterrows():
     exp_val = df_tx[(df_tx["Account"] == a_name) & (df_tx["Type"] == "Expense")]["Amount"].sum()
     cc_paid_out = df_tx[(df_tx["Type"] == "CC Payment") & (df_tx["Merchant"].str.contains(a_name, na=False))]["Amount"].sum()
     
-    current_cash = base_val + inc_val - exp_val - cc_paid_out
+    # Dynamic transfers accounting
+    transfers_in = df_tx[(df_tx["Account"] == a_name) & (df_tx["Type"] == "Transfer") & (df_tx["Notes"].str.contains("Inflow", na=False))]["Amount"].sum()
+    transfers_out = df_tx[(df_tx["Account"] == a_name) & (df_tx["Type"] == "Transfer") & (df_tx["Notes"].str.contains("Outflow", na=False))]["Amount"].sum()
+    
+    current_cash = base_val + inc_val - exp_val - cc_paid_out + transfers_in - transfers_out
     live_cash_registry.append({
         "name": a_name,
         "role": acc["Role_Or_Memo"],
@@ -446,8 +457,19 @@ def get_tx_rows_html(acc_name):
                 vendor = r.get("Merchant", "")
                 date_val = str(r.get("Date", ""))
                 label = f"{vendor} — {desc}" if desc and str(desc).strip() != "" and str(desc).lower() != "nan" else vendor
-                amt_color = "#34D399" if t_type == "Income" else ("#60A5FA" if t_type == "CC Payment" else "#F87171")
-                prefix = "+" if t_type == "Income" else "-"
+                
+                if t_type == "Income" or "Inflow" in str(r.get("Notes", "")):
+                    amt_color = "#34D399"
+                    prefix = "+"
+                elif t_type == "CC Payment":
+                    amt_color = "#60A5FA"
+                    prefix = "-"
+                elif t_type == "Transfer":
+                    amt_color = "#C084FC"
+                    prefix = "+" if "Inflow" in str(r.get("Notes", "")) else "-"
+                else:
+                    amt_color = "#F87171"
+                    prefix = "-"
                 
                 html += f"""<div style="display:flex; justify-content:space-between; align-items:center; background:#162032; border-radius:6px; padding:6px 10px; margin-bottom:4px; font-size:12px; border:1px solid #334155;"><div><span style="color:#CBD5E1; font-weight:600;">{label}</span><div style="font-size:10px; color:#64748B;">{date_val} • {t_type}</div></div><div style="font-weight:800; color:{amt_color}; font-size:13px; text-align:right;">{prefix}${amt:,.2f}</div></div>"""
             return html
@@ -545,7 +567,6 @@ tabs = st.tabs([
     "💬 AI Advisor"
 ])
 
-# Dynamic dropdown lists built straight from registry
 all_account_names = list(df_registry["Account_Name"])
 deposit_accounts = list(df_registry[df_registry["Account_Type"] == "Cash / Bank"]["Account_Name"])
 
@@ -568,7 +589,7 @@ with tabs[0]:
     ai_placeholder.caption("✨ *Fetching personalized AI insights...*")
 
     st.subheader("⚡ Fast Entry")
-    tab_exp, tab_inc, tab_pay = st.tabs(["💸 Expense", "💵 Income", "🔄 CC Payment"])
+    tab_exp, tab_inc, tab_pay, tab_trans = st.tabs(["💸 Expense", "💵 Income", "🔄 CC Payment", "🔁 Transfer"])
 
     with tab_exp:
         with st.form("log_expense_form", clear_on_submit=True):
@@ -682,6 +703,66 @@ with tabs[0]:
                     st.rerun()
                 except Exception as err:
                     st.error(f"❌ Write Error: {str(err)}\n{traceback.format_exc()}")
+
+    with tab_trans:
+        with st.form("log_transfer_form", clear_on_submit=True):
+            trans_amt = st.number_input("Transfer Amount ($)", min_value=0.01, step=10.00, format="%.2f", key="f_trans_amt")
+            
+            col_t1, col_t2 = st.columns(2)
+            with col_t1:
+                from_trans_acc = st.selectbox("Transfer From", deposit_accounts, key="f_trans_from")
+            with col_t2:
+                # Default to second option if possible to avoid same-account selection
+                default_to_idx = 1 if len(deposit_accounts) > 1 else 0
+                to_trans_acc = st.selectbox("Transfer Into", deposit_accounts, index=default_to_idx, key="f_trans_to")
+                
+            trans_memo = st.text_input("Transfer Memo (Optional)", placeholder="e.g. Weekly savings sweep, Checking top-off", key="f_trans_memo")
+            trans_date = st.date_input("Date", value=datetime.today(), key="f_trans_date")
+            
+            if st.form_submit_button("Execute Transfer"):
+                if from_trans_acc == to_trans_acc:
+                    st.error("❌ Source and destination accounts cannot be the same.")
+                else:
+                    now_str = datetime.now().strftime('%Y%m%d%H%M%S')
+                    date_str = trans_date.strftime("%Y-%m-%d")
+                    memo_str = f" — {trans_memo.strip()}" if trans_memo.strip() else ""
+                    
+                    goal_tag = "Baltimore 1st Home" if ("4979" in to_trans_acc or "SECU" in to_trans_acc) else "General Living"
+                    
+                    # 1. Source account (Outflow record)
+                    debit_row = [
+                        f"TX-{now_str}-A",
+                        date_str,
+                        from_trans_acc,
+                        "Transfer",
+                        "Transfer / Sweep",
+                        f"Transfer to {to_trans_acc}",
+                        float(trans_amt),
+                        goal_tag,
+                        f"Outflow to {to_trans_acc}{memo_str}",
+                        "Transfer Outflow"
+                    ]
+                    
+                    # 2. Destination account (Inflow record)
+                    credit_row = [
+                        f"TX-{now_str}-B",
+                        date_str,
+                        to_trans_acc,
+                        "Transfer",
+                        "Transfer / Sweep",
+                        f"Transfer from {from_trans_acc}",
+                        float(trans_amt),
+                        goal_tag,
+                        f"Inflow from {from_trans_acc}{memo_str}",
+                        "Transfer Inflow"
+                    ]
+                    
+                    try:
+                        append_multiple_tx_to_sheet([debit_row, credit_row])
+                        st.success(f"✅ Successfully transferred ${trans_amt:.2f} from {from_trans_acc} to {to_trans_acc}!")
+                        st.rerun()
+                    except Exception as err:
+                        st.error(f"❌ Write Error: {str(err)}\n{traceback.format_exc()}")
 
 # ------------------------------------------
 # TAB 2: ACCOUNTS & CREDIT HUB
@@ -1017,7 +1098,7 @@ with tabs[2]:
 with tabs[3]:
     st.subheader("🏠 Baltimore Home Purchase Target")
     st.progress(goal_progress)
-    st.caption(f"**${total_cash:,.2f}** saved of **${HOME_GOAL:,.2f}** goal ({(goal_progress*100):.1f}%)[cite: 1]")
+    st.caption(f"**${total_cash:,.2f}** saved of **${HOME_GOAL:,.2f}** goal ({(goal_progress*100):.1f}%)")
     
     col_a, col_b = st.columns(2)
     with col_a:
@@ -1037,16 +1118,16 @@ with tabs[3]:
         
     st.markdown("""
     ---
-    **10% Down Acquisition Strategy Summary:**[cite: 1]
-    * **Target Price:** $300,000 | **Down Payment (10%):** $30,000[cite: 1]
-    * **Estimated Closing & Prepaids:** $11,000[cite: 1]
-    * **Credits & Assistance Applied:** -$21,000[cite: 1]
-      * *2.5% Buyer Agent Commission Credit:* -$7,500[cite: 1]
-      * *Maryland Mortgage Program (MMP) DPA:* -$9,000[cite: 1]
-      * *Seller Concessions (1.5%):* -$4,500[cite: 1]
-    * **Net Cash at Settlement:** $20,000[cite: 1]
-    * **Post-Closing 3-Mo Reserves:** $6,500[cite: 1]
-    * **Total Liquid Target:** **$26,500**[cite: 1]
+    **10% Down Acquisition Strategy Summary:**
+    * **Target Price:** $300,000 | **Down Payment (10%):** $30,000
+    * **Estimated Closing & Prepaids:** $11,000
+    * **Credits & Assistance Applied:** -$21,000
+      * *2.5% Buyer Agent Commission Credit:* -$7,500
+      * *Maryland Mortgage Program (MMP) DPA:* -$9,000
+      * *Seller Concessions (1.5%):* -$4,500
+    * **Net Cash at Settlement:** $20,000
+    * **Post-Closing 3-Mo Reserves:** $6,500
+    * **Total Liquid Target:** **$26,500**
     """)
 
 # ------------------------------------------
@@ -1080,7 +1161,7 @@ with tabs[4]:
         - Total Personal CC Debt: ${personal_cc_debt:,.2f} across ${personal_cc_limit:,.2f} limit (Overall Util: {personal_utilization:.2f}%)
         - Business CC Debt: ${biz_cc_debt:,.2f} (Chase 0431)
         - Net Liquid Cash: ${net_liquid_cash:,.2f}
-        - 1st Home Goal: $26,500 target by March 1, 2027 (${total_cash:,.2f} saved so far, ${remaining_goal:,.2f} remaining)[cite: 1].
+        - 1st Home Goal: $26,500 target by March 1, 2027 (${total_cash:,.2f} saved so far, ${remaining_goal:,.2f} remaining).
         - Dynamic AZEO Card: {azeo_card_name}.
         - Recent 15 Ledger Entries: {recent_tx_summary}
 
