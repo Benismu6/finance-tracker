@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 import calendar
 import traceback
+import re
 from streamlit_gsheets import GSheetsConnection
 import gspread
 from google.oauth2.service_account import Credentials
@@ -121,7 +122,7 @@ st.markdown("""
         border-radius: 8px !important;
     }
 
-    /* EXACT ORIGINAL CARD CONTAINER */
+    /* EXACT ORIGINAL CARD CONTAINER (UNTOUCHED) */
     details.card-container {
         background-color: #1E293B;
         border: 1px solid #334155;
@@ -207,19 +208,26 @@ st.markdown("""
         background-color: #475569;
     }
 
-    /* OFF-SCREEN HIDDEN CONTAINER FOR STREAMLIT TRIGGERS */
-    div.st-key-hidden_triggers,
-    div.st-key-hidden_triggers * {
-        position: fixed !important;
-        top: -9999px !important;
+    /* ZERO-HEIGHT OFF-SCREEN CONTAINER (INTERACTIVE TO JAVASCRIPT DISPATCH) */
+    div.st-key-hidden_triggers {
+        position: absolute !important;
         left: -9999px !important;
+        top: 0px !important;
         width: 1px !important;
         height: 1px !important;
         opacity: 0 !important;
-        pointer-events: none !important;
         overflow: hidden !important;
         margin: 0 !important;
         padding: 0 !important;
+        z-index: -100 !important;
+    }
+    div.st-key-hidden_triggers * {
+        height: 0px !important;
+        min-height: 0px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: none !important;
+        opacity: 0 !important;
     }
 
     .badge-opt { background-color: #065F46; color: #6EE7B7; padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
@@ -527,8 +535,17 @@ CATEGORY_COLORS = {
 }
 
 # ==========================================
-# 4. CARD HTML RENDERING HELPERS
+# 4. CARD HTML RENDERING HELPERS & DISPATCH ENGINE
 # ==========================================
+def make_trigger_js(trigger_key: str) -> str:
+    """Dispatches a native click event to the target Streamlit widget key safely."""
+    return (
+        f"var d=document;try{{if(window.parent&&window.parent.document)d=window.parent.document;}}catch(e){{}} "
+        f"var b=d.querySelector('.st-key-{trigger_key} button');"
+        f"if(!b){{var btns=Array.from(d.querySelectorAll('button'));b=btns.find(function(el){{return (el.textContent||'').trim()==='{trigger_key}';}});}}"
+        f"if(b){{b.dispatchEvent(new MouseEvent('click',{{bubbles:true,cancelable:true,view:window}}));b.click();}}"
+    )
+
 def get_tx_rows_html(acc_name):
     if not df_tx.empty and "Account" in df_tx.columns:
         sub_tx = df_tx[
@@ -587,7 +604,7 @@ def modal_bank_income(acc_name):
         payer = st.text_input("Payer / Store", placeholder="e.g. Employer Payroll, Uber Payout, Client")
         memo = st.text_input("Memo (Optional)", placeholder="e.g. Paycheck deposit")
         tx_date = st.date_input("Date", value=datetime.today())
-        gt = "Baltimore 1st Home" if ("4979" in acc_name or "SECU" in acc_name) else "General Living"
+        gt = "Baltimore 1st Home" if ("4979" in acc_name or "SECU" in acc_name) else "General Living"[cite: 1]
         
         if st.form_submit_button("Record Deposit"):
             row = [
@@ -626,7 +643,7 @@ def modal_bank_transfer(from_acc):
                 now_str = datetime.now().strftime('%Y%m%d%H%M%S')
                 d_str = tx_date.strftime("%Y-%m-%d")
                 memo_str = f" — {memo.strip()}" if memo.strip() else ""
-                gt = "Baltimore 1st Home" if ("4979" in to_acc or "SECU" in to_acc) else "General Living"
+                gt = "Baltimore 1st Home" if ("4979" in to_acc or "SECU" in to_acc) else "General Living"[cite: 1]
                 
                 debit_row = [
                     f"TX-{now_str}-A", d_str, from_acc, "Transfer", "Transfer / Sweep",
@@ -652,7 +669,7 @@ def modal_bank_expense(acc_name):
         vendor = st.text_input("Merchant / Store", placeholder="e.g. Landlord, Shell, Trader Joe's")
         desc = st.text_input("Memo (Optional)", placeholder="e.g. Direct withdrawal")
         tx_date = st.date_input("Date", value=datetime.today())
-        gt = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"])
+        gt = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"])[cite: 1]
         
         if st.form_submit_button("Save Expense"):
             row = [
@@ -683,7 +700,7 @@ def modal_card_expense(card_name):
         vendor = st.text_input("Merchant / Store", placeholder="e.g. Amazon, Shell, Quick Mart")
         desc = st.text_input("Memo (Optional)", placeholder="e.g. Gas, Work lunch")
         tx_date = st.date_input("Date", value=datetime.today())
-        gt = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"])
+        gt = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"])[cite: 1]
         
         if st.form_submit_button("Record Charge"):
             row = [
@@ -804,7 +821,7 @@ def fetch_ai_insights_cached(net_cash, tot_cash, p_debt, b_debt, p_util, azeo_ca
     return f"💡 **Executive Snapshot:** Net liquid cash stands at \\${net_cash:,.2f} with credit utilization optimized at {p_util:.2f}%. Maintain {azeo_card} at ~\\$10 for your AZEO boost while clearing non-AZEO cards to \\$0."
 
 # ==========================================
-# 7. APP TABS & UI RENDERING (ACCOUNTS & CREDIT HUB AS DEFAULT)
+# 7. APP TABS & UI RENDERING
 # ==========================================
 tabs = st.tabs([
     "💳 Accounts & Credit Hub", 
@@ -815,7 +832,7 @@ tabs = st.tabs([
 ])
 
 # ------------------------------------------
-# TAB 1: ACCOUNTS & CREDIT HUB (DEFAULT LOAD PAGE)
+# TAB 1: ACCOUNTS & CREDIT HUB
 # ------------------------------------------
 with tabs[0]:
     col_h1, col_h2 = st.columns([3.5, 1.5])
@@ -837,13 +854,13 @@ with tabs[0]:
         bal = acc["current_balance"]
         pct_of_total = (bal / total_cash) * 100 if total_cash > 0 else 0.0
         tx_rows = get_tx_rows_html(acc['name'])
-        sanitized_name = acc['name'].replace(' ', '_')
+        sanitized_name = re.sub(r'[^a-zA-Z0-9_]', '_', acc['name'])
         
         btn_html = f"""
         <div style="display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap;">
-            <button class="drawer-btn drawer-btn-emerald" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_INC_{sanitized_name}'; }}); if(b) b.click();">💵 Deposit</button>
-            <button class="drawer-btn drawer-btn-purple" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_TRANS_{sanitized_name}'; }}); if(b) b.click();">🔁 Transfer</button>
-            <button class="drawer-btn drawer-btn-slate" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_BEXP_{sanitized_name}'; }}); if(b) b.click();">💸 Expense</button>
+            <button class="drawer-btn drawer-btn-emerald" type="button" onclick="{make_trigger_js(f'trig_inc_{sanitized_name}')}">💵 Deposit</button>
+            <button class="drawer-btn drawer-btn-purple" type="button" onclick="{make_trigger_js(f'trig_trans_{sanitized_name}')}">🔁 Transfer</button>
+            <button class="drawer-btn drawer-btn-slate" type="button" onclick="{make_trigger_js(f'trig_bexp_{sanitized_name}')}">💸 Expense</button>
         </div>
         """
         
@@ -867,12 +884,12 @@ with tabs[0]:
         limit = c["limit"]
         util = c["utilization"]
         tx_rows = get_tx_rows_html(c['name'])
-        sanitized_name = c['name'].replace(' ', '_')
+        sanitized_name = re.sub(r'[^a-zA-Z0-9_]', '_', c['name'])
         
         btn_html = f"""
         <div style="display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap;">
-            <button class="drawer-btn drawer-btn-blue" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_CEXP_{sanitized_name}'; }}); if(b) b.click();">💳 Charge</button>
-            <button class="drawer-btn drawer-btn-purple" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_CPAY_{sanitized_name}'; }}); if(b) b.click();">🔄 Pay Card</button>
+            <button class="drawer-btn drawer-btn-blue" type="button" onclick="{make_trigger_js(f'trig_cexp_{sanitized_name}')}">💳 Charge</button>
+            <button class="drawer-btn drawer-btn-purple" type="button" onclick="{make_trigger_js(f'trig_cpay_{sanitized_name}')}">🔄 Pay Card</button>
         </div>
         """
         
@@ -896,12 +913,12 @@ with tabs[0]:
     for c in live_biz_cc:
         bal = c["current_balance"]
         tx_rows = get_tx_rows_html(c['name'])
-        sanitized_name = c['name'].replace(' ', '_')
+        sanitized_name = re.sub(r'[^a-zA-Z0-9_]', '_', c['name'])
         
         btn_html = f"""
         <div style="display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap;">
-            <button class="drawer-btn drawer-btn-blue" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_CEXP_{sanitized_name}'; }}); if(b) b.click();">💳 Charge</button>
-            <button class="drawer-btn drawer-btn-purple" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_CPAY_{sanitized_name}'; }}); if(b) b.click();">🔄 Pay Card</button>
+            <button class="drawer-btn drawer-btn-blue" type="button" onclick="{make_trigger_js(f'trig_bcexp_{sanitized_name}')}">💳 Charge</button>
+            <button class="drawer-btn drawer-btn-purple" type="button" onclick="{make_trigger_js(f'trig_bcpay_{sanitized_name}')}">🔄 Pay Card</button>
         </div>
         """
         
@@ -916,57 +933,30 @@ with tabs[0]:
             action_buttons_html=btn_html
         )
 
-    # 4. COMPLETELY OFF-SCREEN HIDDEN CONTAINER FOR TRIGGER DISPATCH
+    # 4. ZERO-PIXEL OFF-SCREEN CONTAINER FOR STREAMLIT DIALOG DISPATCH
     with st.container(key="hidden_triggers"):
         for acc in live_cash_registry:
-            san_name = acc['name'].replace(' ', '_')
-            if st.button(f"TRIG_INC_{san_name}", key=f"trig_inc_{san_name}"):
+            san_name = re.sub(r'[^a-zA-Z0-9_]', '_', acc['name'])
+            if st.button(f"trig_inc_{san_name}", key=f"trig_inc_{san_name}"):
                 modal_bank_income(acc['name'])
-            if st.button(f"TRIG_TRANS_{san_name}", key=f"trig_trans_{san_name}"):
+            if st.button(f"trig_trans_{san_name}", key=f"trig_trans_{san_name}"):
                 modal_bank_transfer(acc['name'])
-            if st.button(f"TRIG_BEXP_{san_name}", key=f"trig_bexp_{san_name}"):
+            if st.button(f"trig_bexp_{san_name}", key=f"trig_bexp_{san_name}"):
                 modal_bank_expense(acc['name'])
                 
         for c in live_personal_cc:
-            san_name = c['name'].replace(' ', '_')
-            if st.button(f"TRIG_CEXP_{san_name}", key=f"trig_cexp_{san_name}"):
+            san_name = re.sub(r'[^a-zA-Z0-9_]', '_', c['name'])
+            if st.button(f"trig_cexp_{san_name}", key=f"trig_cexp_{san_name}"):
                 modal_card_expense(c['name'])
-            if st.button(f"TRIG_CPAY_{san_name}", key=f"trig_cpay_{san_name}"):
+            if st.button(f"trig_cpay_{san_name}", key=f"trig_cpay_{san_name}"):
                 modal_card_payment(c['name'], c['current_balance'])
                 
         for c in live_biz_cc:
-            san_name = c['name'].replace(' ', '_')
-            if st.button(f"TRIG_CEXP_{san_name}", key=f"trig_bcexp_{san_name}"):
+            san_name = re.sub(r'[^a-zA-Z0-9_]', '_', c['name'])
+            if st.button(f"trig_bcexp_{san_name}", key=f"trig_bcexp_{san_name}"):
                 modal_card_expense(c['name'])
-            if st.button(f"TRIG_CPAY_{san_name}", key=f"trig_bcpay_{san_name}"):
+            if st.button(f"trig_bcpay_{san_name}", key=f"trig_bcpay_{san_name}"):
                 modal_card_payment(c['name'], c['current_balance'])
-
-    # JavaScript failsafe to ensure 0-pixel rendering on all browsers
-    st.markdown("""
-    <script>
-    (function() {
-        function hidePills() {
-            var doc = window.parent.document;
-            var btns = doc.querySelectorAll('button');
-            btns.forEach(function(b) {
-                if (b.innerText && b.innerText.trim().indexOf('TRIG_') === 0) {
-                    var wrap = b.closest('div[data-testid="stElementContainer"]') || b.closest('div[data-testid="stButton"]') || b;
-                    wrap.style.setProperty('position', 'fixed', 'important');
-                    wrap.style.setProperty('top', '-9999px', 'important');
-                    wrap.style.setProperty('left', '-9999px', 'important');
-                    wrap.style.setProperty('opacity', '0', 'important');
-                    wrap.style.setProperty('height', '0px', 'important');
-                    wrap.style.setProperty('margin', '0px', 'important');
-                    wrap.style.setProperty('pointer-events', 'none', 'important');
-                }
-            });
-        }
-        hidePills();
-        var obs = new MutationObserver(hidePills);
-        obs.observe(window.parent.document.body, { childList: true, subtree: true });
-    })();
-    </script>
-    """, unsafe_allow_html=True)
 
 # ------------------------------------------
 # TAB 2: COMMAND CENTER
@@ -997,7 +987,7 @@ with tabs[1]:
             vendor = st.text_input("Merchant / Store", placeholder="e.g. Amazon, Shell, Trader Joe's", key="f_exp_ven")
             item_desc = st.text_input("Item Description (Optional)", placeholder="e.g. Phone case, Work lunch", key="f_exp_item")
             entry_date = st.date_input("Date", value=datetime.today(), key="f_exp_date")
-            goal_tag = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"], key="f_exp_gt")
+            goal_tag = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"], key="f_exp_gt")[cite: 1]
             
             if st.form_submit_button("Record Expense"):
                 tx_id = f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -1034,7 +1024,7 @@ with tabs[1]:
             if st.form_submit_button("Record Income"):
                 tx_id = f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}"
                 date_str = inc_date.strftime("%Y-%m-%d")
-                goal = "Baltimore 1st Home" if "4979" in inc_acc or "SECU" in inc_acc else "General Living"
+                goal = "Baltimore 1st Home" if "4979" in inc_acc or "SECU" in inc_acc else "General Living"[cite: 1]
                 
                 new_row_values = [
                     tx_id,
@@ -1123,7 +1113,7 @@ with tabs[1]:
                     now_str = datetime.now().strftime('%Y%m%d%H%M%S')
                     date_str = trans_date.strftime("%Y-%m-%d")
                     memo_str = f" — {trans_memo.strip()}" if trans_memo.strip() else ""
-                    goal_tag = "Baltimore 1st Home" if ("4979" in to_trans_acc or "SECU" in to_trans_acc) else "General Living"
+                    goal_tag = "Baltimore 1st Home" if ("4979" in to_trans_acc or "SECU" in to_trans_acc) else "General Living"[cite: 1]
                     
                     debit_row = [
                         f"TX-{now_str}-A", date_str, from_trans_acc, "Transfer", "Transfer / Sweep",
@@ -1142,7 +1132,7 @@ with tabs[1]:
                         st.error(f"❌ Write Error: {str(err)}\n{traceback.format_exc()}")
 
 # ------------------------------------------
-# TAB 3: ANALYTICS & CHARTS (HOLE = 0.55 DONUT ENGINE)
+# TAB 3: ANALYTICS & CHARTS
 # ------------------------------------------
 with tabs[2]:
     st.subheader("📊 Financial Analytics & Trends")
@@ -1269,7 +1259,7 @@ with tabs[2]:
 
     st.divider()
 
-    # BLOCK 2: MONTHLY ANALYTICS (HOLE = 0.55 DONUT)
+    # BLOCK 2: MONTHLY ANALYTICS
     m_year, m_month = ref_date.year, ref_date.month
     month_start = date(m_year, m_month, 1)
     month_end = date(m_year, m_month, calendar.monthrange(m_year, m_month)[1])
@@ -1406,7 +1396,7 @@ with tabs[2]:
 with tabs[3]:
     st.subheader("🏠 Baltimore Home Purchase Target")
     st.progress(goal_progress)
-    st.caption(f"**${total_cash:,.2f}** saved of **${HOME_GOAL:,.2f}** goal ({(goal_progress*100):.1f}%)")
+    st.caption(f"**${total_cash:,.2f}** saved of **${HOME_GOAL:,.2f}** goal ({(goal_progress*100):.1f}%)[cite: 1]")
     
     col_a, col_b = st.columns(2)
     with col_a:
@@ -1426,16 +1416,16 @@ with tabs[3]:
         
     st.markdown("""
     ---
-    **10% Down Acquisition Strategy Summary:**
-    * **Target Price:** $300,000 | **Down Payment (10%):** $30,000
-    * **Estimated Closing & Prepaids:** $11,000
-    * **Credits & Assistance Applied:** -$21,000
-      * *2.5% Buyer Agent Commission Credit:* -$7,500
-      * *Maryland Mortgage Program (MMP) DPA:* -$9,000
-      * *Seller Concessions (1.5%):* -$4,500
-    * **Net Cash at Settlement:** $20,000
-    * **Post-Closing 3-Mo Reserves:** $6,500
-    * **Total Liquid Target:** **$26,500**
+    **10% Down Acquisition Strategy Summary:**[cite: 1]
+    * **Target Price:** $300,000 | **Down Payment (10%):** $30,000[cite: 1]
+    * **Estimated Closing & Prepaids:** $11,000[cite: 1]
+    * **Credits & Assistance Applied:** -$21,000[cite: 1]
+      * *2.5% Buyer Agent Commission Credit:* -$7,500[cite: 1]
+      * *Maryland Mortgage Program (MMP) DPA:* -$9,000[cite: 1]
+      * *Seller Concessions (1.5%):* -$4,500[cite: 1]
+    * **Net Cash at Settlement:** $20,000[cite: 1]
+    * **Post-Closing 3-Mo Reserves:** $6,500[cite: 1]
+    * **Total Liquid Target:** **$26,500**[cite: 1]
     """)
 
 # ------------------------------------------
@@ -1447,7 +1437,7 @@ with tabs[4]:
 
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = [
-            {"role": "assistant", "content": "Hey! I have real-time access to your ledger, balances, and $26.5k Baltimore home purchase target. What would you like to check or plan today?"}
+            {"role": "assistant", "content": "Hey! I have real-time access to your ledger, balances, and $26.5k Baltimore home purchase target. What would you like to check or plan today?"}[cite: 1]
         ]
 
     for msg in st.session_state.chat_messages:
