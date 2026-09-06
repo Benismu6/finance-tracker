@@ -123,7 +123,7 @@ st.markdown("""
         width: 100%;
     }
     div.small-add-btn button {
-        height: 30px !important;
+        height: 20px !important;
         font-size: 11px !important;
         font-weight: 700 !important;
         padding: 3px 10px !important;
