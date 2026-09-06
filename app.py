@@ -112,47 +112,84 @@ st.markdown("""
         box-shadow: 0 2px 6px rgba(37,99,235,0.4);
     }
 
-    /* CARD WRAPPER */
-    .card-box {
+    /* ZERO-GAP CLICKABLE CARD CONTAINER */
+    details.card-container {
         background-color: #1E293B;
-        border-top: 1px solid #334155;
-        border-left: 1px solid #334155;
-        border-right: 1px solid #334155;
-        border-radius: 12px 12px 0px 0px;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        margin-bottom: 10px;
+        overflow: hidden;
+        transition: border-color 0.2s ease;
+    }
+    details.card-container[open] {
+        border-color: #3B82F6;
+    }
+    details.card-container > summary {
+        list-style: none;
+        outline: none;
+        cursor: pointer;
         padding: 14px 16px;
-        margin-bottom: 0px;
+        background-color: #1E293B;
+        user-select: none;
+    }
+    details.card-container > summary::-webkit-details-marker {
+        display: none;
+    }
+    details.card-container > summary:hover {
+        background-color: #243248;
+    }
+    .card-drawer {
+        background-color: #0F172A;
+        padding: 12px 14px;
+        border-top: 1px solid #334155;
     }
 
-    /* ATTACHED EXPANDER DRAWER */
-    div[data-testid="stExpander"] {
-        border-top: none !important;
-        border-left: 1px solid #334155 !important;
-        border-right: 1px solid #334155 !important;
-        border-bottom: 1px solid #334155 !important;
-        border-radius: 0px 0px 12px 12px !important;
-        background-color: #1E293B !important;
-        margin-bottom: 12px !important;
-        overflow: hidden !important;
+    /* QUICK ACTION BUTTONS INSIDE CARD DRAWER */
+    .drawer-btn {
+        display: inline-block;
+        padding: 6px 12px;
+        font-size: 11px;
+        font-weight: 700;
+        border-radius: 6px;
+        text-decoration: none;
+        text-align: center;
+        cursor: pointer;
+        transition: background-color 0.15s ease;
+        user-select: none;
+        border: 1px solid transparent;
     }
-    div[data-testid="stExpander"] summary {
-        background-color: #162032 !important;
-        padding: 8px 14px !important;
-        font-size: 12px !important;
-        color: #93C5FD !important;
-        border-radius: 0px 0px 12px 12px !important;
+    .drawer-btn-blue {
+        background-color: #2563EB;
+        color: #FFFFFF !important;
+        border-color: #3B82F6;
     }
-    div[data-testid="stExpander"] summary:hover {
-        background-color: #1e2d44 !important;
+    .drawer-btn-blue:hover {
+        background-color: #1D4ED8;
     }
-    div[data-testid="stExpander"] div[role="region"] {
-        background-color: #0F172A !important;
-        padding: 12px !important;
-        border-top: 1px solid #334155 !important;
+    .drawer-btn-purple {
+        background-color: #7C3AED;
+        color: #FFFFFF !important;
+        border-color: #8B5CF6;
     }
-
-    .badge-opt { background-color: #065F46; color: #6EE7B7; padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
-    .badge-warn { background-color: #7C2D12; color: #FDBA74; padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
-    .badge-biz { background-color: #312E81; color: #C7D2FE; padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .drawer-btn-purple:hover {
+        background-color: #6D28D9;
+    }
+    .drawer-btn-emerald {
+        background-color: #059669;
+        color: #FFFFFF !important;
+        border-color: #10B981;
+    }
+    .drawer-btn-emerald:hover {
+        background-color: #047857;
+    }
+    .drawer-btn-slate {
+        background-color: #334155;
+        color: #F1F5F9 !important;
+        border-color: #475569;
+    }
+    .drawer-btn-slate:hover {
+        background-color: #475569;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -366,16 +403,16 @@ for c in raw_personal_cards:
     
     is_azeo = (c_name == azeo_card_name)
     if stmt_due > 0.01:
-        badge_html = '<span class="badge-warn">⚠️ STMT DUE</span>'
+        badge_html = '<span style="background-color:#7C2D12;color:#FDBA74;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;">⚠️ STMT DUE</span>'
         action_text = f"Pay ${stmt_due:.2f} stmt balance by {next_due.strftime('%b %d')}"
     elif is_azeo:
-        badge_html = '<span class="badge-opt">✅ AZEO ACTIVE (~1%)</span>'
+        badge_html = '<span style="background-color:#065F46;color:#6EE7B7;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;">✅ AZEO ACTIVE (~1%)</span>'
         action_text = f"Leave ${bal:.2f} to report on {next_close.strftime('%b %d')}"
     elif bal > 0.01:
-        badge_html = '<span class="badge-warn">⚠️ PAY BEFORE CLOSE</span>'
+        badge_html = '<span style="background-color:#7C2D12;color:#FDBA74;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;">⚠️ PAY BEFORE CLOSE</span>'
         action_text = f"Pay ${bal:.2f} by {next_close.strftime('%b %d')} to report $0"
     else:
-        badge_html = '<span class="badge-opt">✅ $0 REPORTING</span>'
+        badge_html = '<span style="background-color:#065F46;color:#6EE7B7;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;">✅ $0 REPORTING</span>'
         action_text = f"Reports $0 on {next_close.strftime('%b %d')}"
         
     card_dict = dict(c)
@@ -455,9 +492,9 @@ CATEGORY_COLORS = {
 }
 
 # ==========================================
-# 4. CARD TRANSACTIONS RENDERER
+# 4. CARD HTML RENDERING HELPERS
 # ==========================================
-def render_recent_transactions(acc_name):
+def get_tx_rows_html(acc_name):
     if not df_tx.empty and "Account" in df_tx.columns:
         sub_tx = df_tx[
             (df_tx["Account"] == acc_name) | 
@@ -465,7 +502,7 @@ def render_recent_transactions(acc_name):
         ].tail(5)
         
         if not sub_tx.empty:
-            st.markdown("<div style='font-size:12px; font-weight:700; color:#94A3B8; margin-top:8px; margin-bottom:6px;'>Last 5 Transactions:</div>", unsafe_allow_html=True)
+            html = "<div style='font-size:12px; font-weight:700; color:#94A3B8; margin-top:8px; margin-bottom:6px;'>Last 5 Transactions:</div>"
             for _, r in sub_tx.iloc[::-1].iterrows():
                 t_type = r.get("Type", "Expense")
                 amt = float(r.get("Amount", 0.0))
@@ -487,21 +524,18 @@ def render_recent_transactions(acc_name):
                     amt_color = "#F87171"
                     prefix = "-"
                 
-                st.markdown(f"""
-                <div style="display:flex; justify-content:space-between; align-items:center; background:#162032; border-radius:6px; padding:6px 10px; margin-bottom:4px; font-size:12px; border:1px solid #334155;">
-                    <div>
-                        <span style="color:#CBD5E1; font-weight:600;">{label}</span>
-                        <div style="font-size:10px; color:#64748B;">{date_val} • {t_type}</div>
-                    </div>
-                    <div style="font-weight:800; color:{amt_color}; font-size:13px; text-align:right;">
-                        {prefix}${amt:,.2f}
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+                html += f"""<div style="display:flex; justify-content:space-between; align-items:center; background:#162032; border-radius:6px; padding:6px 10px; margin-bottom:4px; font-size:12px; border:1px solid #334155;"><div><span style="color:#CBD5E1; font-weight:600;">{label}</span><div style="font-size:10px; color:#64748B;">{date_val} • {t_type}</div></div><div style="font-weight:800; color:{amt_color}; font-size:13px; text-align:right;">{prefix}${amt:,.2f}</div></div>"""
+            return html
         else:
-            st.caption("ℹ️ No transactions recorded for this account yet.")
-    else:
-        st.caption("ℹ️ No ledger records available.")
+            return "<div style='font-size:12px; color:#64748B; padding:6px 0;'>ℹ️ No transactions recorded for this account yet.</div>"
+    return "<div style='font-size:12px; color:#64748B; padding:6px 0;'>ℹ️ No ledger records available.</div>"
+
+def render_account_card(title, subtitle, right_val, right_sub, extra_left="", extra_right="", tx_html="", action_buttons_html=""):
+    bottom_bar = f"""<div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;"><span style="font-size:12px; color:#CBD5E1;">{extra_left}</span><div>{extra_right}</div></div>""" if (extra_left or extra_right) else ""
+    val_color = '#38BDF8' if '$' in right_val and '.' in right_val else '#F8FAFC'
+    
+    card_html = f"""<details class="card-container"><summary><div style="display:flex; justify-content:space-between; align-items:center;"><div><span style="font-weight:700; font-size:15px; color:#F8FAFC;">{title}</span><div style="font-size:12px; color:#94A3B8;">{subtitle}</div></div><div style="text-align:right;"><span style="font-weight:800; font-size:18px; color:{val_color};">{right_val}</span><div style="font-size:11px; color:#64748B;">{right_sub}</div></div></div>{bottom_bar}</summary><div class="card-drawer">{action_buttons_html}{tx_html}</div></details>"""
+    st.markdown(card_html, unsafe_allow_html=True)
 
 # ==========================================
 # 5. DYNAMIC TRANSACTION MODALS
@@ -531,7 +565,7 @@ def modal_bank_income(acc_name):
                 float(inc_amt),
                 gt,
                 memo,
-                "Card Direct Entry"
+                "Card Quick Entry"
             ]
             try:
                 append_tx_to_sheet(row)
@@ -596,7 +630,7 @@ def modal_bank_expense(acc_name):
                 float(amt),
                 gt,
                 desc,
-                "Card Direct Entry"
+                "Card Quick Entry"
             ]
             try:
                 append_tx_to_sheet(row)
@@ -627,7 +661,7 @@ def modal_card_expense(card_name):
                 float(amt),
                 gt,
                 desc,
-                "Card Direct Entry"
+                "Card Quick Entry"
             ]
             try:
                 append_tx_to_sheet(row)
@@ -656,7 +690,7 @@ def modal_card_payment(card_name, current_balance):
                 float(pay_amt),
                 "General Living",
                 memo,
-                "Card Direct Entry"
+                "Card Quick Entry"
             ]
             try:
                 append_tx_to_sheet(row)
@@ -701,6 +735,30 @@ def open_new_account_dialog():
                     st.rerun()
                 except Exception as err:
                     st.error(f"Error saving account: {err}")
+
+# Check query params to open modals triggered from inside HTML card drawers
+params = st.query_params
+if "action" in params and "acc" in params:
+    act = params["action"]
+    target = params["acc"]
+    st.query_params.clear()
+    
+    if act == "inc":
+        modal_bank_income(target)
+    elif act == "trans":
+        modal_bank_transfer(target)
+    elif act == "b_exp":
+        modal_bank_expense(target)
+    elif act == "c_exp":
+        modal_card_expense(target)
+    elif act == "c_pay":
+        # Find matching balance
+        matching_bal = 0.0
+        for c in (live_personal_cc + live_biz_cc):
+            if c["name"] == target:
+                matching_bal = c["current_balance"]
+                break
+        modal_card_payment(target, matching_bal)
 
 # ==========================================
 # 6. AI EXECUTIVE SUMMARY & KEY FETCHER
@@ -919,7 +977,7 @@ with tabs[0]:
                         st.error(f"❌ Write Error: {str(err)}\n{traceback.format_exc()}")
 
 # ------------------------------------------
-# TAB 2: ACCOUNTS & CREDIT HUB (INTERACTIVE ACTION BUTTONS INCLUDED)
+# TAB 2: ACCOUNTS & CREDIT HUB (PRESERVED ZERO-GAP CARDS WITH QUICK ACTIONS)
 # ------------------------------------------
 with tabs[1]:
     col_h1, col_h2 = st.columns([3, 1])
@@ -937,37 +995,25 @@ with tabs[1]:
     for acc in live_cash_registry:
         bal = acc["current_balance"]
         pct_of_total = (bal / total_cash) * 100 if total_cash > 0 else 0.0
+        tx_rows = get_tx_rows_html(acc['name'])
         
-        # 1. Permanent Unified Card Block
-        st.markdown(f"""
-        <div class="card-box">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{acc['name']}</span>
-                    <div style="font-size:12px; color:#94A3B8;">{acc['role']}</div>
-                </div>
-                <div style="text-align:right;">
-                    <span style="font-weight:800; font-size:18px; color:#38BDF8;">${bal:,.2f}</span>
-                    <div style="font-size:11px; color:#64748B;">{pct_of_total:.1f}% of cash</div>
-                </div>
-            </div>
+        # Action bar buttons on top of transactions
+        btn_html = f"""
+        <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+            <a class="drawer-btn drawer-btn-emerald" href="?action=inc&acc={acc['name']}" target="_self">💵 Deposit</a>
+            <a class="drawer-btn drawer-btn-purple" href="?action=trans&acc={acc['name']}" target="_self">🔁 Transfer</a>
+            <a class="drawer-btn drawer-btn-slate" href="?action=b_exp&acc={acc['name']}" target="_self">💸 Expense</a>
         </div>
-        """, unsafe_allow_html=True)
+        """
         
-        # 2. Attached Accordion Drawer with Action Buttons on Top
-        with st.expander("🔍 Manage & Activity", expanded=False):
-            b_c1, b_c2, b_c3 = st.columns(3)
-            with b_c1:
-                if st.button("💵 Income", key=f"btn_inc_{acc['name']}", help="Deposit income into this account"):
-                    modal_bank_income(acc['name'])
-            with b_c2:
-                if st.button("🔁 Transfer", key=f"btn_tr_{acc['name']}", help="Transfer funds from this account"):
-                    modal_bank_transfer(acc['name'])
-            with b_c3:
-                if st.button("💸 Expense", key=f"btn_exp_{acc['name']}", help="Record debit expense from this account"):
-                    modal_bank_expense(acc['name'])
-                    
-            render_recent_transactions(acc['name'])
+        render_account_card(
+            title=acc['name'],
+            subtitle=acc['role'],
+            right_val=f"${bal:,.2f}",
+            right_sub=f"{pct_of_total:.1f}% of cash",
+            tx_html=tx_rows,
+            action_buttons_html=btn_html
+        )
 
     st.divider()
 
@@ -978,38 +1024,26 @@ with tabs[1]:
         bal = c["current_balance"]
         limit = c["limit"]
         util = c["utilization"]
+        tx_rows = get_tx_rows_html(c['name'])
         
-        # 1. Permanent Unified Card Block
-        st.markdown(f"""
-        <div class="card-box">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                <div>
-                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{c['name']}</span>
-                    <div style="font-size:12px; color:#64748B;">Limit: ${limit:,.0f} | Closes: {c['close_str']}</div>
-                </div>
-                <div style="text-align:right;">
-                    <span style="font-weight:800; font-size:18px; color:#F8FAFC;">${bal:.2f}</span>
-                    <span style="font-size:12px; font-weight:700; color:#94A3B8; margin-left:4px;">({util:.1f}%)</span>
-                </div>
-            </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-                <span style="font-size:12px; color:#CBD5E1;">{c['action_text']}</span>
-                <div>{c['badge_html']}</div>
-            </div>
+        # Action bar buttons on top of transactions
+        btn_html = f"""
+        <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+            <a class="drawer-btn drawer-btn-blue" href="?action=c_exp&acc={c['name']}" target="_self">💳 Charge</a>
+            <a class="drawer-btn drawer-btn-purple" href="?action=c_pay&acc={c['name']}" target="_self">🔄 Pay Card</a>
         </div>
-        """, unsafe_allow_html=True)
+        """
         
-        # 2. Attached Accordion Drawer with Action Buttons on Top
-        with st.expander("🔍 Manage & Activity", expanded=False):
-            c_col1, c_col2 = st.columns(2)
-            with c_col1:
-                if st.button("💳 Charge", key=f"btn_charge_{c['name']}", help="Record card purchase"):
-                    modal_card_expense(c['name'])
-            with c_col2:
-                if st.button("🔄 Pay Card", key=f"btn_pay_{c['name']}", help="Record credit card payment"):
-                    modal_card_payment(c['name'], bal)
-                    
-            render_recent_transactions(c['name'])
+        render_account_card(
+            title=c['name'],
+            subtitle=f"Limit: ${limit:,.0f} | Closes: {c['close_str']}",
+            right_val=f"${bal:.2f}",
+            right_sub=f"({util:.1f}%)",
+            extra_left=c['action_text'],
+            extra_right=c['badge_html'],
+            tx_html=tx_rows,
+            action_buttons_html=btn_html
+        )
 
     st.divider()
 
@@ -1018,37 +1052,26 @@ with tabs[1]:
     
     for c in live_biz_cc:
         bal = c["current_balance"]
+        tx_rows = get_tx_rows_html(c['name'])
         
-        # 1. Permanent Unified Card Block
-        st.markdown(f"""
-        <div class="card-box">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                <div>
-                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{c['name']}</span>
-                    <div style="font-size:12px; color:#64748B;">Business Card</div>
-                </div>
-                <div style="text-align:right;">
-                    <span style="font-weight:800; font-size:18px; color:#F8FAFC;">${bal:.2f}</span>
-                </div>
-            </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-                <span style="font-size:12px; color:#CBD5E1;">Due: {c['due_str']} | Closes: {c['close_str']}</span>
-                <div><span class="badge-biz">💼 BUSINESS</span></div>
-            </div>
+        # Action bar buttons on top of transactions
+        btn_html = f"""
+        <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+            <a class="drawer-btn drawer-btn-blue" href="?action=c_exp&acc={c['name']}" target="_self">💳 Charge</a>
+            <a class="drawer-btn drawer-btn-purple" href="?action=c_pay&acc={c['name']}" target="_self">🔄 Pay Card</a>
         </div>
-        """, unsafe_allow_html=True)
+        """
         
-        # 2. Attached Accordion Drawer with Action Buttons on Top
-        with st.expander("🔍 Manage & Activity", expanded=False):
-            b_col1, b_col2 = st.columns(2)
-            with b_col1:
-                if st.button("💳 Charge", key=f"btn_charge_{c['name']}", help="Record card purchase"):
-                    modal_card_expense(c['name'])
-            with b_col2:
-                if st.button("🔄 Pay Card", key=f"btn_pay_{c['name']}", help="Record credit card payment"):
-                    modal_card_payment(c['name'], bal)
-                    
-            render_recent_transactions(c['name'])
+        render_account_card(
+            title=c['name'],
+            subtitle="Business Card",
+            right_val=f"${bal:.2f}",
+            right_sub="",
+            extra_left=f"Due: {c['due_str']} | Closes: {c['close_str']}",
+            extra_right='<span style="background-color:#312E81;color:#C7D2FE;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;">💼 BUSINESS</span>',
+            tx_html=tx_rows,
+            action_buttons_html=btn_html
+        )
 
 # ------------------------------------------
 # TAB 3: ANALYTICS & CHARTS (HOLE = 0.55 DONUT ENGINE)
