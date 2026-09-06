@@ -112,37 +112,47 @@ st.markdown("""
         box-shadow: 0 2px 6px rgba(37,99,235,0.4);
     }
 
-    /* ZERO-GAP NATIVE ACCORDION CONTAINERS */
-    details.card-container {
+    /* CARD WRAPPER */
+    .card-box {
         background-color: #1E293B;
-        border: 1px solid #334155;
-        border-radius: 12px;
-        margin-bottom: 10px;
-        overflow: hidden;
-        transition: border-color 0.2s ease;
-    }
-    details.card-container[open] {
-        border-color: #3B82F6;
-    }
-    details.card-container > summary {
-        list-style: none;
-        outline: none;
-        cursor: pointer;
-        padding: 14px 16px;
-        background-color: #1E293B;
-        user-select: none;
-    }
-    details.card-container > summary::-webkit-details-marker {
-        display: none;
-    }
-    details.card-container > summary:hover {
-        background-color: #243248;
-    }
-    .card-drawer {
-        background-color: #0F172A;
-        padding: 12px 14px;
         border-top: 1px solid #334155;
+        border-left: 1px solid #334155;
+        border-right: 1px solid #334155;
+        border-radius: 12px 12px 0px 0px;
+        padding: 14px 16px;
+        margin-bottom: 0px;
     }
+
+    /* ATTACHED EXPANDER DRAWER */
+    div[data-testid="stExpander"] {
+        border-top: none !important;
+        border-left: 1px solid #334155 !important;
+        border-right: 1px solid #334155 !important;
+        border-bottom: 1px solid #334155 !important;
+        border-radius: 0px 0px 12px 12px !important;
+        background-color: #1E293B !important;
+        margin-bottom: 12px !important;
+        overflow: hidden !important;
+    }
+    div[data-testid="stExpander"] summary {
+        background-color: #162032 !important;
+        padding: 8px 14px !important;
+        font-size: 12px !important;
+        color: #93C5FD !important;
+        border-radius: 0px 0px 12px 12px !important;
+    }
+    div[data-testid="stExpander"] summary:hover {
+        background-color: #1e2d44 !important;
+    }
+    div[data-testid="stExpander"] div[role="region"] {
+        background-color: #0F172A !important;
+        padding: 12px !important;
+        border-top: 1px solid #334155 !important;
+    }
+
+    .badge-opt { background-color: #065F46; color: #6EE7B7; padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .badge-warn { background-color: #7C2D12; color: #FDBA74; padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .badge-biz { background-color: #312E81; color: #C7D2FE; padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -237,6 +247,10 @@ def get_ledger_data():
         if df is not None and not df.empty:
             df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce").fillna(0.0)
             df["Date_DT"] = pd.to_datetime(df["Date"], errors="coerce").dt.date
+            if "Account" in df.columns:
+                df["Account"] = df["Account"].astype(str).str.strip().str.replace(" C ", " ").str.replace(" S ", " ")
+            if "Type" in df.columns:
+                df["Type"] = df["Type"].astype(str).str.strip()
             return df
     except Exception:
         pass
@@ -249,6 +263,8 @@ def get_accounts_registry():
     try:
         df_acc = conn.read(worksheet="Accounts_Master", ttl="0")
         if df_acc is not None and not df_acc.empty:
+            if "Account_Name" in df_acc.columns:
+                df_acc["Account_Name"] = df_acc["Account_Name"].astype(str).str.strip().str.replace(" C ", " ").str.replace(" S ", " ")
             df_acc["Base_Balance"] = pd.to_numeric(df_acc["Base_Balance"], errors="coerce").fillna(0.0)
             df_acc["Credit_Limit"] = pd.to_numeric(df_acc["Credit_Limit"], errors="coerce").fillna(0.0)
             df_acc["Due_Day"] = pd.to_numeric(df_acc["Due_Day"], errors="coerce").fillna(1).astype(int)
@@ -263,6 +279,7 @@ def get_accounts_registry():
         {"Account_Name": "SECU 4979", "Account_Type": "Cash / Bank", "Role_Or_Memo": "Dedicated Home Savings / HYSA", "Base_Balance": 0.00, "Credit_Limit": 0, "Due_Day": 0, "Close_Day": 0},
         {"Account_Name": "SoFi 3854", "Account_Type": "Cash / Bank", "Role_Or_Memo": "SoFi Primary Checking", "Base_Balance": 0.00, "Credit_Limit": 0, "Due_Day": 0, "Close_Day": 0},
         {"Account_Name": "SoFi 4777", "Account_Type": "Cash / Bank", "Role_Or_Memo": "SoFi High-Yield Savings", "Base_Balance": 0.00, "Credit_Limit": 0, "Due_Day": 0, "Close_Day": 0},
+        {"Account_Name": "Loan to Parents", "Account_Type": "Cash / Bank", "Role_Or_Memo": "Appliance Loan", "Base_Balance": 0.00, "Credit_Limit": 0, "Due_Day": 0, "Close_Day": 0},
         {"Account_Name": "Chase 1993", "Account_Type": "Personal CC", "Role_Or_Memo": "Primary Daily", "Base_Balance": 517.70, "Credit_Limit": 10600.00, "Due_Day": 1, "Close_Day": 4},
         {"Account_Name": "Chase 2207", "Account_Type": "Personal CC", "Role_Or_Memo": "AZEO 1%", "Base_Balance": 9.52, "Credit_Limit": 4900.00, "Due_Day": 1, "Close_Day": 4},
         {"Account_Name": "BofA 5309", "Account_Type": "Personal CC", "Role_Or_Memo": "Buffer Card", "Base_Balance": 22.21, "Credit_Limit": 7500.00, "Due_Day": 24, "Close_Day": 27},
@@ -286,7 +303,6 @@ for _, acc in cash_df.iterrows():
     exp_val = df_tx[(df_tx["Account"] == a_name) & (df_tx["Type"] == "Expense")]["Amount"].sum()
     cc_paid_out = df_tx[(df_tx["Type"] == "CC Payment") & (df_tx["Merchant"].str.contains(a_name, na=False))]["Amount"].sum()
     
-    # Dynamic transfers accounting
     transfers_in = df_tx[(df_tx["Account"] == a_name) & (df_tx["Type"] == "Transfer") & (df_tx["Notes"].str.contains("Inflow", na=False))]["Amount"].sum()
     transfers_out = df_tx[(df_tx["Account"] == a_name) & (df_tx["Type"] == "Transfer") & (df_tx["Notes"].str.contains("Outflow", na=False))]["Amount"].sum()
     
@@ -350,16 +366,16 @@ for c in raw_personal_cards:
     
     is_azeo = (c_name == azeo_card_name)
     if stmt_due > 0.01:
-        badge_html = '<span style="background-color:#7C2D12;color:#FDBA74;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;">⚠️ STMT DUE</span>'
+        badge_html = '<span class="badge-warn">⚠️ STMT DUE</span>'
         action_text = f"Pay ${stmt_due:.2f} stmt balance by {next_due.strftime('%b %d')}"
     elif is_azeo:
-        badge_html = '<span style="background-color:#065F46;color:#6EE7B7;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;">✅ AZEO ACTIVE (~1%)</span>'
+        badge_html = '<span class="badge-opt">✅ AZEO ACTIVE (~1%)</span>'
         action_text = f"Leave ${bal:.2f} to report on {next_close.strftime('%b %d')}"
     elif bal > 0.01:
-        badge_html = '<span style="background-color:#7C2D12;color:#FDBA74;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;">⚠️ PAY BEFORE CLOSE</span>'
+        badge_html = '<span class="badge-warn">⚠️ PAY BEFORE CLOSE</span>'
         action_text = f"Pay ${bal:.2f} by {next_close.strftime('%b %d')} to report $0"
     else:
-        badge_html = '<span style="background-color:#065F46;color:#6EE7B7;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;">✅ $0 REPORTING</span>'
+        badge_html = '<span class="badge-opt">✅ $0 REPORTING</span>'
         action_text = f"Reports $0 on {next_close.strftime('%b %d')}"
         
     card_dict = dict(c)
@@ -439,9 +455,9 @@ CATEGORY_COLORS = {
 }
 
 # ==========================================
-# 4. CARD HTML RENDERING HELPERS
+# 4. CARD TRANSACTIONS RENDERER
 # ==========================================
-def get_tx_rows_html(acc_name):
+def render_recent_transactions(acc_name):
     if not df_tx.empty and "Account" in df_tx.columns:
         sub_tx = df_tx[
             (df_tx["Account"] == acc_name) | 
@@ -449,7 +465,7 @@ def get_tx_rows_html(acc_name):
         ].tail(5)
         
         if not sub_tx.empty:
-            html = "<div style='font-size:12px; font-weight:700; color:#94A3B8; margin-bottom:6px;'>Last 5 Transactions:</div>"
+            st.markdown("<div style='font-size:12px; font-weight:700; color:#94A3B8; margin-top:8px; margin-bottom:6px;'>Last 5 Transactions:</div>", unsafe_allow_html=True)
             for _, r in sub_tx.iloc[::-1].iterrows():
                 t_type = r.get("Type", "Expense")
                 amt = float(r.get("Amount", 0.0))
@@ -471,27 +487,189 @@ def get_tx_rows_html(acc_name):
                     amt_color = "#F87171"
                     prefix = "-"
                 
-                html += f"""<div style="display:flex; justify-content:space-between; align-items:center; background:#162032; border-radius:6px; padding:6px 10px; margin-bottom:4px; font-size:12px; border:1px solid #334155;"><div><span style="color:#CBD5E1; font-weight:600;">{label}</span><div style="font-size:10px; color:#64748B;">{date_val} • {t_type}</div></div><div style="font-weight:800; color:{amt_color}; font-size:13px; text-align:right;">{prefix}${amt:,.2f}</div></div>"""
-            return html
+                st.markdown(f"""
+                <div style="display:flex; justify-content:space-between; align-items:center; background:#162032; border-radius:6px; padding:6px 10px; margin-bottom:4px; font-size:12px; border:1px solid #334155;">
+                    <div>
+                        <span style="color:#CBD5E1; font-weight:600;">{label}</span>
+                        <div style="font-size:10px; color:#64748B;">{date_val} • {t_type}</div>
+                    </div>
+                    <div style="font-weight:800; color:{amt_color}; font-size:13px; text-align:right;">
+                        {prefix}${amt:,.2f}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
         else:
-            return "<div style='font-size:12px; color:#64748B; padding:4px 0;'>ℹ️ No transactions recorded for this account yet.</div>"
-    return "<div style='font-size:12px; color:#64748B; padding:4px 0;'>ℹ️ No ledger records available.</div>"
-
-def render_account_card(title, subtitle, right_val, right_sub, extra_left="", extra_right="", tx_html=""):
-    bottom_bar = f"""<div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;"><span style="font-size:12px; color:#CBD5E1;">{extra_left}</span><div>{extra_right}</div></div>""" if (extra_left or extra_right) else ""
-    val_color = '#38BDF8' if '$' in right_val and '.' in right_val else '#F8FAFC'
-    
-    card_html = f"""<details class="card-container"><summary><div style="display:flex; justify-content:space-between; align-items:center;"><div><span style="font-weight:700; font-size:15px; color:#F8FAFC;">{title}</span><div style="font-size:12px; color:#94A3B8;">{subtitle}</div></div><div style="text-align:right;"><span style="font-weight:800; font-size:18px; color:{val_color};">{right_val}</span><div style="font-size:11px; color:#64748B;">{right_sub}</div></div></div>{bottom_bar}</summary><div class="card-drawer">{tx_html}</div></details>"""
-    st.markdown(card_html, unsafe_allow_html=True)
+            st.caption("ℹ️ No transactions recorded for this account yet.")
+    else:
+        st.caption("ℹ️ No ledger records available.")
 
 # ==========================================
-# 5. DYNAMIC NEW ACCOUNT MODAL
+# 5. DYNAMIC TRANSACTION MODALS
 # ==========================================
+all_account_names = list(df_registry["Account_Name"])
+deposit_accounts = list(df_registry[df_registry["Account_Type"] == "Cash / Bank"]["Account_Name"])
+
+@st.dialog("Record Income / Deposit")
+def modal_bank_income(acc_name):
+    st.markdown(f"**Target Account:** `{acc_name}`")
+    with st.form(f"form_m_inc_{acc_name}", clear_on_submit=True):
+        inc_amt = st.number_input("Amount ($)", min_value=0.01, step=1.00, format="%.2f")
+        inc_cat = st.selectbox("Source", ["W2 Salary", "Uber Income", "Other Income"])
+        payer = st.text_input("Payer / Store", placeholder="e.g. Employer Payroll, Uber Payout, Client")
+        memo = st.text_input("Memo (Optional)", placeholder="e.g. Paycheck deposit")
+        tx_date = st.date_input("Date", value=datetime.today())
+        gt = "Baltimore 1st Home" if ("4979" in acc_name or "SECU" in acc_name) else "General Living"
+        
+        if st.form_submit_button("Record Deposit"):
+            row = [
+                f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                tx_date.strftime("%Y-%m-%d"),
+                acc_name,
+                "Income",
+                inc_cat,
+                payer,
+                float(inc_amt),
+                gt,
+                memo,
+                "Card Direct Entry"
+            ]
+            try:
+                append_tx_to_sheet(row)
+                st.success(f"✅ Deposited ${inc_amt:.2f} into {acc_name}!")
+                st.rerun()
+            except Exception as err:
+                st.error(f"Error: {err}")
+
+@st.dialog("Execute Account Transfer")
+def modal_bank_transfer(from_acc):
+    st.markdown(f"**From Account:** `{from_acc}`")
+    other_accounts = [a for a in deposit_accounts if a != from_acc]
+    with st.form(f"form_m_trans_{from_acc}", clear_on_submit=True):
+        trans_amt = st.number_input("Transfer Amount ($)", min_value=0.01, step=10.00, format="%.2f")
+        to_acc = st.selectbox("Transfer Into", other_accounts if other_accounts else deposit_accounts)
+        memo = st.text_input("Memo (Optional)", placeholder="e.g. Weekly savings sweep")
+        tx_date = st.date_input("Date", value=datetime.today())
+        
+        if st.form_submit_button("Confirm Transfer"):
+            if from_acc == to_acc:
+                st.error("Source and destination must be different.")
+            else:
+                now_str = datetime.now().strftime('%Y%m%d%H%M%S')
+                d_str = tx_date.strftime("%Y-%m-%d")
+                memo_str = f" — {memo.strip()}" if memo.strip() else ""
+                gt = "Baltimore 1st Home" if ("4979" in to_acc or "SECU" in to_acc) else "General Living"
+                
+                debit_row = [
+                    f"TX-{now_str}-A", d_str, from_acc, "Transfer", "Transfer / Sweep",
+                    f"Transfer to {to_acc}", float(trans_amt), gt, f"Outflow to {to_acc}{memo_str}", "Transfer Outflow"
+                ]
+                credit_row = [
+                    f"TX-{now_str}-B", d_str, to_acc, "Transfer", "Transfer / Sweep",
+                    f"Transfer from {from_acc}", float(trans_amt), gt, f"Inflow from {from_acc}{memo_str}", "Transfer Inflow"
+                ]
+                try:
+                    append_multiple_tx_to_sheet([debit_row, credit_row])
+                    st.success(f"✅ Transferred ${trans_amt:.2f} to {to_acc}!")
+                    st.rerun()
+                except Exception as err:
+                    st.error(f"Error: {err}")
+
+@st.dialog("Record Debit Expense")
+def modal_bank_expense(acc_name):
+    st.markdown(f"**Account:** `{acc_name}`")
+    with st.form(f"form_m_b_exp_{acc_name}", clear_on_submit=True):
+        amt = st.number_input("Amount ($)", min_value=0.01, step=1.00, format="%.2f")
+        cat = st.selectbox("Category", categories_list)
+        vendor = st.text_input("Merchant / Store", placeholder="e.g. Landlord, Shell, Trader Joe's")
+        desc = st.text_input("Memo (Optional)", placeholder="e.g. Direct withdrawal")
+        tx_date = st.date_input("Date", value=datetime.today())
+        gt = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"])
+        
+        if st.form_submit_button("Save Expense"):
+            row = [
+                f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                tx_date.strftime("%Y-%m-%d"),
+                acc_name,
+                "Expense",
+                cat,
+                vendor,
+                float(amt),
+                gt,
+                desc,
+                "Card Direct Entry"
+            ]
+            try:
+                append_tx_to_sheet(row)
+                st.success(f"✅ Saved ${amt:.2f} expense from {acc_name}!")
+                st.rerun()
+            except Exception as err:
+                st.error(f"Error: {err}")
+
+@st.dialog("Record Credit Card Charge")
+def modal_card_expense(card_name):
+    st.markdown(f"**Card:** `{card_name}`")
+    with st.form(f"form_m_c_exp_{card_name}", clear_on_submit=True):
+        amt = st.number_input("Amount ($)", min_value=0.01, step=1.00, format="%.2f")
+        cat = st.selectbox("Category", categories_list)
+        vendor = st.text_input("Merchant / Store", placeholder="e.g. Amazon, Shell, Quick Mart")
+        desc = st.text_input("Memo (Optional)", placeholder="e.g. Gas, Work lunch")
+        tx_date = st.date_input("Date", value=datetime.today())
+        gt = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"])
+        
+        if st.form_submit_button("Record Charge"):
+            row = [
+                f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                tx_date.strftime("%Y-%m-%d"),
+                card_name,
+                "Expense",
+                cat,
+                vendor,
+                float(amt),
+                gt,
+                desc,
+                "Card Direct Entry"
+            ]
+            try:
+                append_tx_to_sheet(row)
+                st.success(f"✅ Saved ${amt:.2f} charge on {card_name}!")
+                st.rerun()
+            except Exception as err:
+                st.error(f"Error: {err}")
+
+@st.dialog("Record Credit Card Payment")
+def modal_card_payment(card_name, current_balance):
+    st.markdown(f"**Card:** `{card_name}` | **Balance:** `${current_balance:,.2f}`")
+    with st.form(f"form_m_c_pay_{card_name}", clear_on_submit=True):
+        pay_amt = st.number_input("Payment Amount ($)", min_value=0.01, value=float(current_balance) if current_balance > 0 else 10.00, step=1.00, format="%.2f")
+        from_acc = st.selectbox("Paid From", deposit_accounts)
+        memo = st.text_input("Memo (Optional)", placeholder="e.g. Statement payoff, AZEO adjustment")
+        tx_date = st.date_input("Date", value=datetime.today())
+        
+        if st.form_submit_button("Submit Payment"):
+            row = [
+                f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                tx_date.strftime("%Y-%m-%d"),
+                card_name,
+                "CC Payment",
+                "CC Payment",
+                f"Paid from {from_acc}",
+                float(pay_amt),
+                "General Living",
+                memo,
+                "Card Direct Entry"
+            ]
+            try:
+                append_tx_to_sheet(row)
+                st.success(f"✅ Recorded ${pay_amt:.2f} payment to {card_name}!")
+                st.rerun()
+            except Exception as err:
+                st.error(f"Error: {err}")
+
 @st.dialog("➕ Add New Account to Registry")
 def open_new_account_dialog():
     st.caption("Register a new account or credit card. It will automatically update in Google Sheets and sync into your app.")
     with st.form("new_account_form", clear_on_submit=True):
-        new_acc_name = st.text_input("Account Identifier (e.g. Chase 5432, Capital One 1122)", placeholder="Card or Bank Name")
+        new_acc_name = st.text_input("Account Identifier (e.g. Capital One 1122)", placeholder="Card or Bank Name")
         new_acc_type = st.selectbox("Account Type", ["Cash / Bank", "Personal CC", "Business CC"])
         new_acc_role = st.text_input("Role / Memo (e.g. Dining Card, HYSA)", placeholder="Brief description")
         new_acc_base = st.number_input("Starting Base Balance ($)", min_value=0.00, step=10.00, format="%.2f")
@@ -566,9 +744,6 @@ tabs = st.tabs([
     "🏠 Home Goal", 
     "💬 AI Advisor"
 ])
-
-all_account_names = list(df_registry["Account_Name"])
-deposit_accounts = list(df_registry[df_registry["Account_Type"] == "Cash / Bank"]["Account_Name"])
 
 # ------------------------------------------
 # TAB 1: COMMAND CENTER
@@ -712,7 +887,6 @@ with tabs[0]:
             with col_t1:
                 from_trans_acc = st.selectbox("Transfer From", deposit_accounts, key="f_trans_from")
             with col_t2:
-                # Default to second option if possible to avoid same-account selection
                 default_to_idx = 1 if len(deposit_accounts) > 1 else 0
                 to_trans_acc = st.selectbox("Transfer Into", deposit_accounts, index=default_to_idx, key="f_trans_to")
                 
@@ -726,35 +900,15 @@ with tabs[0]:
                     now_str = datetime.now().strftime('%Y%m%d%H%M%S')
                     date_str = trans_date.strftime("%Y-%m-%d")
                     memo_str = f" — {trans_memo.strip()}" if trans_memo.strip() else ""
-                    
                     goal_tag = "Baltimore 1st Home" if ("4979" in to_trans_acc or "SECU" in to_trans_acc) else "General Living"
                     
-                    # 1. Source account (Outflow record)
                     debit_row = [
-                        f"TX-{now_str}-A",
-                        date_str,
-                        from_trans_acc,
-                        "Transfer",
-                        "Transfer / Sweep",
-                        f"Transfer to {to_trans_acc}",
-                        float(trans_amt),
-                        goal_tag,
-                        f"Outflow to {to_trans_acc}{memo_str}",
-                        "Transfer Outflow"
+                        f"TX-{now_str}-A", date_str, from_trans_acc, "Transfer", "Transfer / Sweep",
+                        f"Transfer to {to_trans_acc}", float(trans_amt), goal_tag, f"Outflow to {to_trans_acc}{memo_str}", "Transfer Outflow"
                     ]
-                    
-                    # 2. Destination account (Inflow record)
                     credit_row = [
-                        f"TX-{now_str}-B",
-                        date_str,
-                        to_trans_acc,
-                        "Transfer",
-                        "Transfer / Sweep",
-                        f"Transfer from {from_trans_acc}",
-                        float(trans_amt),
-                        goal_tag,
-                        f"Inflow from {from_trans_acc}{memo_str}",
-                        "Transfer Inflow"
+                        f"TX-{now_str}-B", date_str, to_trans_acc, "Transfer", "Transfer / Sweep",
+                        f"Transfer from {from_trans_acc}", float(trans_amt), goal_tag, f"Inflow from {from_trans_acc}{memo_str}", "Transfer Inflow"
                     ]
                     
                     try:
@@ -765,7 +919,7 @@ with tabs[0]:
                         st.error(f"❌ Write Error: {str(err)}\n{traceback.format_exc()}")
 
 # ------------------------------------------
-# TAB 2: ACCOUNTS & CREDIT HUB
+# TAB 2: ACCOUNTS & CREDIT HUB (INTERACTIVE ACTION BUTTONS INCLUDED)
 # ------------------------------------------
 with tabs[1]:
     col_h1, col_h2 = st.columns([3, 1])
@@ -783,15 +937,37 @@ with tabs[1]:
     for acc in live_cash_registry:
         bal = acc["current_balance"]
         pct_of_total = (bal / total_cash) * 100 if total_cash > 0 else 0.0
-        tx_rows = get_tx_rows_html(acc['name'])
         
-        render_account_card(
-            title=acc['name'],
-            subtitle=acc['role'],
-            right_val=f"${bal:,.2f}",
-            right_sub=f"{pct_of_total:.1f}% of cash",
-            tx_html=tx_rows
-        )
+        # 1. Permanent Unified Card Block
+        st.markdown(f"""
+        <div class="card-box">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{acc['name']}</span>
+                    <div style="font-size:12px; color:#94A3B8;">{acc['role']}</div>
+                </div>
+                <div style="text-align:right;">
+                    <span style="font-weight:800; font-size:18px; color:#38BDF8;">${bal:,.2f}</span>
+                    <div style="font-size:11px; color:#64748B;">{pct_of_total:.1f}% of cash</div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # 2. Attached Accordion Drawer with Action Buttons on Top
+        with st.expander("🔍 Manage & Activity", expanded=False):
+            b_c1, b_c2, b_c3 = st.columns(3)
+            with b_c1:
+                if st.button("💵 Income", key=f"btn_inc_{acc['name']}", help="Deposit income into this account"):
+                    modal_bank_income(acc['name'])
+            with b_c2:
+                if st.button("🔁 Transfer", key=f"btn_tr_{acc['name']}", help="Transfer funds from this account"):
+                    modal_bank_transfer(acc['name'])
+            with b_c3:
+                if st.button("💸 Expense", key=f"btn_exp_{acc['name']}", help="Record debit expense from this account"):
+                    modal_bank_expense(acc['name'])
+                    
+            render_recent_transactions(acc['name'])
 
     st.divider()
 
@@ -802,17 +978,38 @@ with tabs[1]:
         bal = c["current_balance"]
         limit = c["limit"]
         util = c["utilization"]
-        tx_rows = get_tx_rows_html(c['name'])
         
-        render_account_card(
-            title=c['name'],
-            subtitle=f"Limit: ${limit:,.0f} | Closes: {c['close_str']}",
-            right_val=f"${bal:.2f}",
-            right_sub=f"({util:.1f}%)",
-            extra_left=c['action_text'],
-            extra_right=c['badge_html'],
-            tx_html=tx_rows
-        )
+        # 1. Permanent Unified Card Block
+        st.markdown(f"""
+        <div class="card-box">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div>
+                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{c['name']}</span>
+                    <div style="font-size:12px; color:#64748B;">Limit: ${limit:,.0f} | Closes: {c['close_str']}</div>
+                </div>
+                <div style="text-align:right;">
+                    <span style="font-weight:800; font-size:18px; color:#F8FAFC;">${bal:.2f}</span>
+                    <span style="font-size:12px; font-weight:700; color:#94A3B8; margin-left:4px;">({util:.1f}%)</span>
+                </div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                <span style="font-size:12px; color:#CBD5E1;">{c['action_text']}</span>
+                <div>{c['badge_html']}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # 2. Attached Accordion Drawer with Action Buttons on Top
+        with st.expander("🔍 Manage & Activity", expanded=False):
+            c_col1, c_col2 = st.columns(2)
+            with c_col1:
+                if st.button("💳 Charge", key=f"btn_charge_{c['name']}", help="Record card purchase"):
+                    modal_card_expense(c['name'])
+            with c_col2:
+                if st.button("🔄 Pay Card", key=f"btn_pay_{c['name']}", help="Record credit card payment"):
+                    modal_card_payment(c['name'], bal)
+                    
+            render_recent_transactions(c['name'])
 
     st.divider()
 
@@ -821,17 +1018,37 @@ with tabs[1]:
     
     for c in live_biz_cc:
         bal = c["current_balance"]
-        tx_rows = get_tx_rows_html(c['name'])
         
-        render_account_card(
-            title=c['name'],
-            subtitle="Business Card",
-            right_val=f"${bal:.2f}",
-            right_sub="",
-            extra_left=f"Due: {c['due_str']} | Closes: {c['close_str']}",
-            extra_right='<span style="background-color:#312E81;color:#C7D2FE;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;">💼 BUSINESS</span>',
-            tx_html=tx_rows
-        )
+        # 1. Permanent Unified Card Block
+        st.markdown(f"""
+        <div class="card-box">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div>
+                    <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{c['name']}</span>
+                    <div style="font-size:12px; color:#64748B;">Business Card</div>
+                </div>
+                <div style="text-align:right;">
+                    <span style="font-weight:800; font-size:18px; color:#F8FAFC;">${bal:.2f}</span>
+                </div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                <span style="font-size:12px; color:#CBD5E1;">Due: {c['due_str']} | Closes: {c['close_str']}</span>
+                <div><span class="badge-biz">💼 BUSINESS</span></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # 2. Attached Accordion Drawer with Action Buttons on Top
+        with st.expander("🔍 Manage & Activity", expanded=False):
+            b_col1, b_col2 = st.columns(2)
+            with b_col1:
+                if st.button("💳 Charge", key=f"btn_charge_{c['name']}", help="Record card purchase"):
+                    modal_card_expense(c['name'])
+            with b_col2:
+                if st.button("🔄 Pay Card", key=f"btn_pay_{c['name']}", help="Record credit card payment"):
+                    modal_card_payment(c['name'], bal)
+                    
+            render_recent_transactions(c['name'])
 
 # ------------------------------------------
 # TAB 3: ANALYTICS & CHARTS (HOLE = 0.55 DONUT ENGINE)
