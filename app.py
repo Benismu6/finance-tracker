@@ -121,7 +121,7 @@ st.markdown("""
         border-radius: 8px !important;
     }
 
-    /* EXACT ZERO-GAP CARD CONTAINER RESTORED */
+    /* EXACT ORIGINAL CARD CONTAINER */
     details.card-container {
         background-color: #1E293B;
         border: 1px solid #334155;
@@ -153,7 +153,7 @@ st.markdown("""
         border-top: 1px solid #334155;
     }
 
-    /* ACTION BUTTONS (NO UNDERLINES) */
+    /* ACTION BUTTONS INSIDE CARDS (UNUNDERLINED) */
     button.drawer-btn {
         display: inline-block;
         padding: 6px 12px;
@@ -207,9 +207,9 @@ st.markdown("""
         background-color: #475569;
     }
 
-    /* COMPLETE OFF-SCREEN HIDING OF STREAMLIT TRIGGER BUTTONS */
-    div[data-testid="stButton"]:has(button[aria-label^="TRIG_"]),
-    button[aria-label^="TRIG_"] {
+    /* OFF-SCREEN HIDDEN CONTAINER FOR STREAMLIT TRIGGERS */
+    div.st-key-hidden_triggers,
+    div.st-key-hidden_triggers * {
         position: fixed !important;
         top: -9999px !important;
         left: -9999px !important;
@@ -600,7 +600,7 @@ def modal_bank_income(acc_name):
                 float(inc_amt),
                 gt,
                 memo,
-                "Card Direct Entry"
+                "Card Quick Entry"
             ]
             try:
                 append_tx_to_sheet(row)
@@ -665,7 +665,7 @@ def modal_bank_expense(acc_name):
                 float(amt),
                 gt,
                 desc,
-                "Card Direct Entry"
+                "Card Quick Entry"
             ]
             try:
                 append_tx_to_sheet(row)
@@ -696,7 +696,7 @@ def modal_card_expense(card_name):
                 float(amt),
                 gt,
                 desc,
-                "Card Direct Entry"
+                "Card Quick Entry"
             ]
             try:
                 append_tx_to_sheet(row)
@@ -725,7 +725,7 @@ def modal_card_payment(card_name, current_balance):
                 float(pay_amt),
                 "General Living",
                 memo,
-                "Card Direct Entry"
+                "Card Quick Entry"
             ]
             try:
                 append_tx_to_sheet(row)
@@ -841,9 +841,9 @@ with tabs[0]:
         
         btn_html = f"""
         <div style="display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap;">
-            <button class="drawer-btn drawer-btn-emerald" type="button" onclick="var b = Array.from(window.parent.document.querySelectorAll('button')).find(function(el){{ return el.getAttribute('aria-label') && el.getAttribute('aria-label').indexOf('TRIG_INC_{sanitized_name}') !== -1; }}); if(b) b.click();">💵 Deposit</button>
-            <button class="drawer-btn drawer-btn-purple" type="button" onclick="var b = Array.from(window.parent.document.querySelectorAll('button')).find(function(el){{ return el.getAttribute('aria-label') && el.getAttribute('aria-label').indexOf('TRIG_TRANS_{sanitized_name}') !== -1; }}); if(b) b.click();">🔁 Transfer</button>
-            <button class="drawer-btn drawer-btn-slate" type="button" onclick="var b = Array.from(window.parent.document.querySelectorAll('button')).find(function(el){{ return el.getAttribute('aria-label') && el.getAttribute('aria-label').indexOf('TRIG_BEXP_{sanitized_name}') !== -1; }}); if(b) b.click();">💸 Expense</button>
+            <button class="drawer-btn drawer-btn-emerald" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_INC_{sanitized_name}'; }}); if(b) b.click();">💵 Deposit</button>
+            <button class="drawer-btn drawer-btn-purple" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_TRANS_{sanitized_name}'; }}); if(b) b.click();">🔁 Transfer</button>
+            <button class="drawer-btn drawer-btn-slate" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_BEXP_{sanitized_name}'; }}); if(b) b.click();">💸 Expense</button>
         </div>
         """
         
@@ -855,14 +855,6 @@ with tabs[0]:
             tx_html=tx_rows,
             action_buttons_html=btn_html
         )
-        
-        # Off-screen hidden triggers
-        if st.button(f"TRIG_INC_{sanitized_name}", key=f"trig_inc_{sanitized_name}"):
-            modal_bank_income(acc['name'])
-        if st.button(f"TRIG_TRANS_{sanitized_name}", key=f"trig_trans_{sanitized_name}"):
-            modal_bank_transfer(acc['name'])
-        if st.button(f"TRIG_BEXP_{sanitized_name}", key=f"trig_bexp_{sanitized_name}"):
-            modal_bank_expense(acc['name'])
 
     st.divider()
 
@@ -879,8 +871,8 @@ with tabs[0]:
         
         btn_html = f"""
         <div style="display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap;">
-            <button class="drawer-btn drawer-btn-blue" type="button" onclick="var b = Array.from(window.parent.document.querySelectorAll('button')).find(function(el){{ return el.getAttribute('aria-label') && el.getAttribute('aria-label').indexOf('TRIG_CEXP_{sanitized_name}') !== -1; }}); if(b) b.click();">💳 Charge</button>
-            <button class="drawer-btn drawer-btn-purple" type="button" onclick="var b = Array.from(window.parent.document.querySelectorAll('button')).find(function(el){{ return el.getAttribute('aria-label') && el.getAttribute('aria-label').indexOf('TRIG_CPAY_{sanitized_name}') !== -1; }}); if(b) b.click();">🔄 Pay Card</button>
+            <button class="drawer-btn drawer-btn-blue" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_CEXP_{sanitized_name}'; }}); if(b) b.click();">💳 Charge</button>
+            <button class="drawer-btn drawer-btn-purple" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_CPAY_{sanitized_name}'; }}); if(b) b.click();">🔄 Pay Card</button>
         </div>
         """
         
@@ -894,12 +886,6 @@ with tabs[0]:
             tx_html=tx_rows,
             action_buttons_html=btn_html
         )
-        
-        # Off-screen hidden triggers
-        if st.button(f"TRIG_CEXP_{sanitized_name}", key=f"trig_cexp_{sanitized_name}"):
-            modal_card_expense(c['name'])
-        if st.button(f"TRIG_CPAY_{sanitized_name}", key=f"trig_cpay_{sanitized_name}"):
-            modal_card_payment(c['name'], bal)
 
     st.divider()
 
@@ -914,8 +900,8 @@ with tabs[0]:
         
         btn_html = f"""
         <div style="display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap;">
-            <button class="drawer-btn drawer-btn-blue" type="button" onclick="var b = Array.from(window.parent.document.querySelectorAll('button')).find(function(el){{ return el.getAttribute('aria-label') && el.getAttribute('aria-label').indexOf('TRIG_CEXP_{sanitized_name}') !== -1; }}); if(b) b.click();">💳 Charge</button>
-            <button class="drawer-btn drawer-btn-purple" type="button" onclick="var b = Array.from(window.parent.document.querySelectorAll('button')).find(function(el){{ return el.getAttribute('aria-label') && el.getAttribute('aria-label').indexOf('TRIG_CPAY_{sanitized_name}') !== -1; }}); if(b) b.click();">🔄 Pay Card</button>
+            <button class="drawer-btn drawer-btn-blue" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_CEXP_{sanitized_name}'; }}); if(b) b.click();">💳 Charge</button>
+            <button class="drawer-btn drawer-btn-purple" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_CPAY_{sanitized_name}'; }}); if(b) b.click();">🔄 Pay Card</button>
         </div>
         """
         
@@ -929,12 +915,58 @@ with tabs[0]:
             tx_html=tx_rows,
             action_buttons_html=btn_html
         )
-        
-        # Off-screen hidden triggers
-        if st.button(f"TRIG_CEXP_{sanitized_name}", key=f"trig_bcexp_{sanitized_name}"):
-            modal_card_expense(c['name'])
-        if st.button(f"TRIG_CPAY_{sanitized_name}", key=f"trig_bcpay_{sanitized_name}"):
-            modal_card_payment(c['name'], bal)
+
+    # 4. COMPLETELY OFF-SCREEN HIDDEN CONTAINER FOR TRIGGER DISPATCH
+    with st.container(key="hidden_triggers"):
+        for acc in live_cash_registry:
+            san_name = acc['name'].replace(' ', '_')
+            if st.button(f"TRIG_INC_{san_name}", key=f"trig_inc_{san_name}"):
+                modal_bank_income(acc['name'])
+            if st.button(f"TRIG_TRANS_{san_name}", key=f"trig_trans_{san_name}"):
+                modal_bank_transfer(acc['name'])
+            if st.button(f"TRIG_BEXP_{san_name}", key=f"trig_bexp_{san_name}"):
+                modal_bank_expense(acc['name'])
+                
+        for c in live_personal_cc:
+            san_name = c['name'].replace(' ', '_')
+            if st.button(f"TRIG_CEXP_{san_name}", key=f"trig_cexp_{san_name}"):
+                modal_card_expense(c['name'])
+            if st.button(f"TRIG_CPAY_{san_name}", key=f"trig_cpay_{san_name}"):
+                modal_card_payment(c['name'], c['current_balance'])
+                
+        for c in live_biz_cc:
+            san_name = c['name'].replace(' ', '_')
+            if st.button(f"TRIG_CEXP_{san_name}", key=f"trig_bcexp_{san_name}"):
+                modal_card_expense(c['name'])
+            if st.button(f"TRIG_CPAY_{san_name}", key=f"trig_bcpay_{san_name}"):
+                modal_card_payment(c['name'], c['current_balance'])
+
+    # JavaScript failsafe to ensure 0-pixel rendering on all browsers
+    st.markdown("""
+    <script>
+    (function() {
+        function hidePills() {
+            var doc = window.parent.document;
+            var btns = doc.querySelectorAll('button');
+            btns.forEach(function(b) {
+                if (b.innerText && b.innerText.trim().indexOf('TRIG_') === 0) {
+                    var wrap = b.closest('div[data-testid="stElementContainer"]') || b.closest('div[data-testid="stButton"]') || b;
+                    wrap.style.setProperty('position', 'fixed', 'important');
+                    wrap.style.setProperty('top', '-9999px', 'important');
+                    wrap.style.setProperty('left', '-9999px', 'important');
+                    wrap.style.setProperty('opacity', '0', 'important');
+                    wrap.style.setProperty('height', '0px', 'important');
+                    wrap.style.setProperty('margin', '0px', 'important');
+                    wrap.style.setProperty('pointer-events', 'none', 'important');
+                }
+            });
+        }
+        hidePills();
+        var obs = new MutationObserver(hidePills);
+        obs.observe(window.parent.document.body, { childList: true, subtree: true });
+    })();
+    </script>
+    """, unsafe_allow_html=True)
 
 # ------------------------------------------
 # TAB 2: COMMAND CENTER
@@ -1374,7 +1406,7 @@ with tabs[2]:
 with tabs[3]:
     st.subheader("🏠 Baltimore Home Purchase Target")
     st.progress(goal_progress)
-    st.caption(f"**${total_cash:,.2f}** saved of **${HOME_GOAL:,.2f}** goal ({(goal_progress*100):.1f}%)[cite: 1]")
+    st.caption(f"**${total_cash:,.2f}** saved of **${HOME_GOAL:,.2f}** goal ({(goal_progress*100):.1f}%)")
     
     col_a, col_b = st.columns(2)
     with col_a:
@@ -1394,16 +1426,16 @@ with tabs[3]:
         
     st.markdown("""
     ---
-    **10% Down Acquisition Strategy Summary:**[cite: 1]
-    * **Target Price:** $300,000 | **Down Payment (10%):** $30,000[cite: 1]
-    * **Estimated Closing & Prepaids:** $11,000[cite: 1]
-    * **Credits & Assistance Applied:** -$21,000[cite: 1]
-      * *2.5% Buyer Agent Commission Credit:* -$7,500[cite: 1]
-      * *Maryland Mortgage Program (MMP) DPA:* -$9,000[cite: 1]
-      * *Seller Concessions (1.5%):* -$4,500[cite: 1]
-    * **Net Cash at Settlement:** $20,000[cite: 1]
-    * **Post-Closing 3-Mo Reserves:** $6,500[cite: 1]
-    * **Total Liquid Target:** **$26,500**[cite: 1]
+    **10% Down Acquisition Strategy Summary:**
+    * **Target Price:** $300,000 | **Down Payment (10%):** $30,000
+    * **Estimated Closing & Prepaids:** $11,000
+    * **Credits & Assistance Applied:** -$21,000
+      * *2.5% Buyer Agent Commission Credit:* -$7,500
+      * *Maryland Mortgage Program (MMP) DPA:* -$9,000
+      * *Seller Concessions (1.5%):* -$4,500
+    * **Net Cash at Settlement:** $20,000
+    * **Post-Closing 3-Mo Reserves:** $6,500
+    * **Total Liquid Target:** **$26,500**
     """)
 
 # ------------------------------------------
@@ -1437,7 +1469,7 @@ with tabs[4]:
         - Total Personal CC Debt: ${personal_cc_debt:,.2f} across ${personal_cc_limit:,.2f} limit (Overall Util: {personal_utilization:.2f}%)
         - Business CC Debt: ${biz_cc_debt:,.2f} (Chase 0431)
         - Net Liquid Cash: ${net_liquid_cash:,.2f}
-        - 1st Home Goal: $26,500 target by March 1, 2027 (${total_cash:,.2f} saved so far, ${remaining_goal:,.2f} remaining)[cite: 1].
+        - 1st Home Goal: $26,500 target by March 1, 2027 (${total_cash:,.2f} saved so far, ${remaining_goal:,.2f} remaining).
         - Dynamic AZEO Card: {azeo_card_name}.
         - Recent 15 Ledger Entries: {recent_tx_summary}
 
