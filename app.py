@@ -115,15 +115,24 @@ st.markdown("""
         box-shadow: 0 2px 6px rgba(37,99,235,0.4);
     }
 
-    /* 15% SMALLER ADD ACCOUNT BUTTON */
+    /* 20% SMALLER ADD ACCOUNT BUTTON WITH TIGHTER VERTICAL ALIGNMENT */
+    div.small-add-btn {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        width: 100%;
+    }
     div.small-add-btn button {
-        height: 32px !important;
+        height: 30px !important;
         font-size: 11px !important;
-        padding: 4px 10px !important;
+        font-weight: 700 !important;
+        padding: 3px 10px !important;
         border-radius: 8px !important;
+        margin: 0 !important;
+        white-space: nowrap !important;
     }
 
-    /* ORIGINAL CARD CONTAINER */
+    /* EXACT ORIGINAL CARD CONTAINER */
     details.card-container {
         background-color: #1E293B;
         border: 1px solid #334155;
@@ -155,7 +164,7 @@ st.markdown("""
         border-top: 1px solid #334155;
     }
 
-    /* ACTION BUTTONS INSIDE CARDS */
+    /* ACTION BUTTONS INSIDE CARDS (UNUNDERLINED) */
     button.drawer-btn {
         display: inline-block;
         padding: 6px 12px;
@@ -209,7 +218,7 @@ st.markdown("""
         background-color: #475569;
     }
 
-    /* ZERO-PIXEL INVISIBLE TRIGGER CONTAINER (ACTIVE FOR EVENTS) */
+    /* ZERO-PIXEL INVISIBLE TRIGGER CONTAINER */
     div.st-key-hidden_triggers {
         position: fixed !important;
         top: 0px !important;
@@ -374,7 +383,7 @@ def get_accounts_registry():
 df_tx = get_ledger_data()
 df_registry = get_accounts_registry()
 
-# 1. DYNAMIC CASH BALANCES
+# 1. DYNAMIC CASH BALANCES (WITH TRANSFERS INCLUDED)
 live_cash_registry = []
 cash_df = df_registry[df_registry["Account_Type"] == "Cash / Bank"]
 
@@ -828,12 +837,12 @@ tabs = st.tabs([
 # TAB 1: ACCOUNTS & CREDIT HUB (DEFAULT LOAD PAGE)
 # ------------------------------------------
 with tabs[0]:
-    col_h1, col_h2 = st.columns([3.5, 1.5])
+    col_h1, col_h2 = st.columns([3.6, 1.2], vertical_alignment="center")
     with col_h1:
         st.markdown(f"""
-        <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:12px;">
-            <h3 style="margin:0; font-size:1.25rem; font-weight:700; color:#F8FAFC;">🏦 Cash & Checking Spread</h3>
-            <span style="font-size:1.15rem; font-weight:800; color:#38BDF8;">${total_cash:,.2f}</span>
+        <div style="display:flex; justify-content:space-between; align-items:center; padding: 2px 0;">
+            <h3 style="margin:0; padding:0; font-size:1.2rem; font-weight:700; color:#F8FAFC; line-height:1.2;">🏦 Cash & Checking</h3>
+            <span style="font-size:1.15rem; font-weight:800; color:#38BDF8; margin-left: 8px;">${total_cash:,.2f}</span>
         </div>
         """, unsafe_allow_html=True)
     with col_h2:
@@ -951,7 +960,7 @@ with tabs[0]:
             if st.button(f"btn_bcpay_{san_name}", key=f"trig_bcpay_{san_name}"):
                 modal_card_payment(c['name'], c['current_balance'])
 
-    # 5. EXECUTING DELEGATED EVENT LISTENER
+    # 5. DELEGATED EVENT LISTENER
     components.html("""
     <script>
     (function() {
@@ -1013,7 +1022,7 @@ with tabs[1]:
             vendor = st.text_input("Merchant / Store", placeholder="e.g. Amazon, Shell, Trader Joe's", key="f_exp_ven")
             item_desc = st.text_input("Item Description (Optional)", placeholder="e.g. Phone case, Work lunch", key="f_exp_item")
             entry_date = st.date_input("Date", value=datetime.today(), key="f_exp_date")
-            goal_tag = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"], key="f_exp_gt")[cite: 1]
+            goal_tag = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"], key="f_exp_gt")
             
             if st.form_submit_button("Record Expense"):
                 tx_id = f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -1050,7 +1059,7 @@ with tabs[1]:
             if st.form_submit_button("Record Income"):
                 tx_id = f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}"
                 date_str = inc_date.strftime("%Y-%m-%d")
-                goal = "Baltimore 1st Home" if "4979" in inc_acc or "SECU" in inc_acc else "General Living"[cite: 1]
+                goal = "Baltimore 1st Home" if "4979" in inc_acc or "SECU" in inc_acc else "General Living"
                 
                 new_row_values = [
                     tx_id,
@@ -1138,8 +1147,8 @@ with tabs[1]:
                 else:
                     now_str = datetime.now().strftime('%Y%m%d%H%M%S')
                     date_str = trans_date.strftime("%Y-%m-%d")
-                    memo_str = f" — {trans_memo.strip()}" if memo.strip() else ""
-                    goal_tag = "Baltimore 1st Home" if ("4979" in to_trans_acc or "SECU" in to_trans_acc) else "General Living"[cite: 1]
+                    memo_str = f" — {trans_memo.strip()}" if trans_memo.strip() else ""
+                    goal_tag = "Baltimore 1st Home" if ("4979" in to_trans_acc or "SECU" in to_trans_acc) else "General Living"
                     
                     debit_row = [
                         f"TX-{now_str}-A", date_str, from_trans_acc, "Transfer", "Transfer / Sweep",
@@ -1422,7 +1431,7 @@ with tabs[2]:
 with tabs[3]:
     st.subheader("🏠 Baltimore Home Purchase Target")
     st.progress(goal_progress)
-    st.caption(f"**${total_cash:,.2f}** saved of **${HOME_GOAL:,.2f}** goal ({(goal_progress*100):.1f}%)[cite: 1]")
+    st.caption(f"**${total_cash:,.2f}** saved of **${HOME_GOAL:,.2f}** goal ({(goal_progress*100):.1f}%)")
     
     col_a, col_b = st.columns(2)
     with col_a:
@@ -1442,16 +1451,16 @@ with tabs[3]:
         
     st.markdown("""
     ---
-    **10% Down Acquisition Strategy Summary:**[cite: 1]
-    * **Target Price:** $300,000 | **Down Payment (10%):** $30,000[cite: 1]
-    * **Estimated Closing & Prepaids:** $11,000[cite: 1]
-    * **Credits & Assistance Applied:** -$21,000[cite: 1]
-      * *2.5% Buyer Agent Commission Credit:* -$7,500[cite: 1]
-      * *Maryland Mortgage Program (MMP) DPA:* -$9,000[cite: 1]
-      * *Seller Concessions (1.5%):* -$4,500[cite: 1]
-    * **Net Cash at Settlement:** $20,000[cite: 1]
-    * **Post-Closing 3-Mo Reserves:** $6,500[cite: 1]
-    * **Total Liquid Target:** **$26,500**[cite: 1]
+    **10% Down Acquisition Strategy Summary:**
+    * **Target Price:** $300,000 | **Down Payment (10%):** $30,000
+    * **Estimated Closing & Prepaids:** $11,000
+    * **Credits & Assistance Applied:** -$21,000
+      * *2.5% Buyer Agent Commission Credit:* -$7,500
+      * *Maryland Mortgage Program (MMP) DPA:* -$9,000
+      * *Seller Concessions (1.5%):* -$4,500
+    * **Net Cash at Settlement:** $20,000
+    * **Post-Closing 3-Mo Reserves:** $6,500
+    * **Total Liquid Target:** **$26,500**
     """)
 
 # ------------------------------------------
@@ -1463,7 +1472,7 @@ with tabs[4]:
 
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = [
-            {"role": "assistant", "content": "Hey! I have real-time access to your ledger, balances, and $26.5k Baltimore home purchase target. What would you like to check or plan today?"}[cite: 1]
+            {"role": "assistant", "content": "Hey! I have real-time access to your ledger, balances, and $26.5k Baltimore home purchase target. What would you like to check or plan today?"}
         ]
 
     for msg in st.session_state.chat_messages:
