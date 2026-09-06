@@ -6,7 +6,6 @@ from datetime import datetime, date, timedelta
 import calendar
 import traceback
 import re
-import streamlit.components.v1 as components
 from streamlit_gsheets import GSheetsConnection
 import gspread
 from google.oauth2.service_account import Credentials
@@ -123,7 +122,7 @@ st.markdown("""
         border-radius: 8px !important;
     }
 
-    /* ORIGINAL CARD CONTAINER */
+    /* EXACT ORIGINAL CARD CONTAINER (UNTOUCHED) */
     details.card-container {
         background-color: #1E293B;
         border: 1px solid #334155;
@@ -155,8 +154,8 @@ st.markdown("""
         border-top: 1px solid #334155;
     }
 
-    /* ACTION BUTTONS INSIDE CARDS */
-    button.drawer-btn {
+    /* ACTION BUTTONS INSIDE CARDS (UNUNDERLINED) */
+    button.drawer-btn, a.drawer-btn {
         display: inline-block;
         padding: 6px 12px;
         font-size: 11px;
@@ -172,7 +171,8 @@ st.markdown("""
         margin-right: 6px;
         margin-bottom: 6px;
     }
-    button.drawer-btn:focus, button.drawer-btn:active, button.drawer-btn:hover {
+    button.drawer-btn:focus, button.drawer-btn:active, button.drawer-btn:hover,
+    a.drawer-btn:focus, a.drawer-btn:active, a.drawer-btn:hover, a.drawer-btn:visited {
         text-decoration: none !important;
         outline: none !important;
     }
@@ -207,29 +207,6 @@ st.markdown("""
     }
     .drawer-btn-slate:hover {
         background-color: #475569;
-    }
-
-    /* ZERO-PIXEL INVISIBLE TRIGGER CONTAINER (ACTIVE FOR EVENTS) */
-    div.st-key-hidden_triggers {
-        position: fixed !important;
-        top: 0px !important;
-        left: 0px !important;
-        width: 0px !important;
-        height: 0px !important;
-        opacity: 0 !important;
-        overflow: hidden !important;
-        z-index: -9999 !important;
-        pointer-events: auto !important;
-    }
-    div.st-key-hidden_triggers button {
-        width: 0px !important;
-        height: 0px !important;
-        min-height: 0px !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        border: none !important;
-        opacity: 0 !important;
-        pointer-events: auto !important;
     }
 
     .badge-opt { background-color: #065F46; color: #6EE7B7; padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
@@ -374,7 +351,7 @@ def get_accounts_registry():
 df_tx = get_ledger_data()
 df_registry = get_accounts_registry()
 
-# 1. DYNAMIC CASH BALANCES
+# 1. DYNAMIC CASH BALANCES (WITH TRANSFERS INCLUDED)
 live_cash_registry = []
 cash_df = df_registry[df_registry["Account_Type"] == "Cash / Bank"]
 
@@ -782,6 +759,41 @@ def open_new_account_dialog():
                     st.error(f"Error saving account: {err}")
 
 # ==========================================
+# 5.5 QUERY-PARAM BASED ACTION DISPATCH
+#     (Replaces the old hidden-button JS-click hack.
+#      Card action links now navigate to "?trigger=..."
+#      which we read here and use to open the right dialog.
+#      This works regardless of Streamlit version / HTML
+#      sanitization, since it relies on a real <a href>
+#      instead of an injected onclick handler.)
+# ==========================================
+_trigger_param = st.query_params.get("trigger")
+if _trigger_param:
+    # Clear immediately so a page refresh doesn't re-fire the same action
+    st.query_params.clear()
+
+    _action, _sep, _san_name = _trigger_param.partition("__")
+
+    _cash_lookup = {re.sub(r'[^a-zA-Z0-9_]', '_', a['name']): a['name'] for a in live_cash_registry}
+    _personal_lookup = {re.sub(r'[^a-zA-Z0-9_]', '_', c['name']): c for c in live_personal_cc}
+    _biz_lookup = {re.sub(r'[^a-zA-Z0-9_]', '_', c['name']): c for c in live_biz_cc}
+
+    if _action == "inc" and _san_name in _cash_lookup:
+        modal_bank_income(_cash_lookup[_san_name])
+    elif _action == "trans" and _san_name in _cash_lookup:
+        modal_bank_transfer(_cash_lookup[_san_name])
+    elif _action == "bexp" and _san_name in _cash_lookup:
+        modal_bank_expense(_cash_lookup[_san_name])
+    elif _action == "cexp" and _san_name in _personal_lookup:
+        modal_card_expense(_personal_lookup[_san_name]['name'])
+    elif _action == "cpay" and _san_name in _personal_lookup:
+        modal_card_payment(_personal_lookup[_san_name]['name'], _personal_lookup[_san_name]['current_balance'])
+    elif _action == "bcexp" and _san_name in _biz_lookup:
+        modal_card_expense(_biz_lookup[_san_name]['name'])
+    elif _action == "bcpay" and _san_name in _biz_lookup:
+        modal_card_payment(_biz_lookup[_san_name]['name'], _biz_lookup[_san_name]['current_balance'])
+
+# ==========================================
 # 6. AI EXECUTIVE SUMMARY & KEY FETCHER
 # ==========================================
 def get_gemini_api_key():
@@ -825,7 +837,7 @@ tabs = st.tabs([
 ])
 
 # ------------------------------------------
-# TAB 1: ACCOUNTS & CREDIT HUB (DEFAULT LOAD PAGE)
+# TAB 1: ACCOUNTS & CREDIT HUB
 # ------------------------------------------
 with tabs[0]:
     col_h1, col_h2 = st.columns([3.5, 1.5])
@@ -847,13 +859,13 @@ with tabs[0]:
         bal = acc["current_balance"]
         pct_of_total = (bal / total_cash) * 100 if total_cash > 0 else 0.0
         tx_rows = get_tx_rows_html(acc['name'])
-        san_name = re.sub(r'[^a-zA-Z0-9_]', '_', acc['name'])
+        sanitized_name = re.sub(r'[^a-zA-Z0-9_]', '_', acc['name'])
         
         btn_html = f"""
         <div style="display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap;">
-            <button class="drawer-btn drawer-btn-emerald" type="button" data-trigger="trig_inc_{san_name}">💵 Deposit</button>
-            <button class="drawer-btn drawer-btn-purple" type="button" data-trigger="trig_trans_{san_name}">🔁 Transfer</button>
-            <button class="drawer-btn drawer-btn-slate" type="button" data-trigger="trig_bexp_{san_name}">💸 Expense</button>
+            <a class="drawer-btn drawer-btn-emerald" href="?trigger=inc__{sanitized_name}" target="_self">💵 Deposit</a>
+            <a class="drawer-btn drawer-btn-purple" href="?trigger=trans__{sanitized_name}" target="_self">🔁 Transfer</a>
+            <a class="drawer-btn drawer-btn-slate" href="?trigger=bexp__{sanitized_name}" target="_self">💸 Expense</a>
         </div>
         """
         
@@ -877,12 +889,12 @@ with tabs[0]:
         limit = c["limit"]
         util = c["utilization"]
         tx_rows = get_tx_rows_html(c['name'])
-        san_name = re.sub(r'[^a-zA-Z0-9_]', '_', c['name'])
+        sanitized_name = re.sub(r'[^a-zA-Z0-9_]', '_', c['name'])
         
         btn_html = f"""
         <div style="display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap;">
-            <button class="drawer-btn drawer-btn-blue" type="button" data-trigger="trig_cexp_{san_name}">💳 Charge</button>
-            <button class="drawer-btn drawer-btn-purple" type="button" data-trigger="trig_cpay_{san_name}">🔄 Pay Card</button>
+            <a class="drawer-btn drawer-btn-blue" href="?trigger=cexp__{sanitized_name}" target="_self">💳 Charge</a>
+            <a class="drawer-btn drawer-btn-purple" href="?trigger=cpay__{sanitized_name}" target="_self">🔄 Pay Card</a>
         </div>
         """
         
@@ -906,12 +918,12 @@ with tabs[0]:
     for c in live_biz_cc:
         bal = c["current_balance"]
         tx_rows = get_tx_rows_html(c['name'])
-        san_name = re.sub(r'[^a-zA-Z0-9_]', '_', c['name'])
+        sanitized_name = re.sub(r'[^a-zA-Z0-9_]', '_', c['name'])
         
         btn_html = f"""
         <div style="display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap;">
-            <button class="drawer-btn drawer-btn-blue" type="button" data-trigger="trig_bcexp_{san_name}">💳 Charge</button>
-            <button class="drawer-btn drawer-btn-purple" type="button" data-trigger="trig_bcpay_{san_name}">🔄 Pay Card</button>
+            <a class="drawer-btn drawer-btn-blue" href="?trigger=bcexp__{sanitized_name}" target="_self">💳 Charge</a>
+            <a class="drawer-btn drawer-btn-purple" href="?trigger=bcpay__{sanitized_name}" target="_self">🔄 Pay Card</a>
         </div>
         """
         
@@ -925,64 +937,6 @@ with tabs[0]:
             tx_html=tx_rows,
             action_buttons_html=btn_html
         )
-
-    # 4. ZERO-PIXEL INVISIBLE NATIVE STREAMLIT BUTTON TRIGGERS
-    with st.container(key="hidden_triggers"):
-        for acc in live_cash_registry:
-            san_name = re.sub(r'[^a-zA-Z0-9_]', '_', acc['name'])
-            if st.button(f"btn_inc_{san_name}", key=f"trig_inc_{san_name}"):
-                modal_bank_income(acc['name'])
-            if st.button(f"btn_trans_{san_name}", key=f"trig_trans_{san_name}"):
-                modal_bank_transfer(acc['name'])
-            if st.button(f"btn_bexp_{san_name}", key=f"trig_bexp_{san_name}"):
-                modal_bank_expense(acc['name'])
-                
-        for c in live_personal_cc:
-            san_name = re.sub(r'[^a-zA-Z0-9_]', '_', c['name'])
-            if st.button(f"btn_cexp_{san_name}", key=f"trig_cexp_{san_name}"):
-                modal_card_expense(c['name'])
-            if st.button(f"btn_cpay_{san_name}", key=f"trig_cpay_{san_name}"):
-                modal_card_payment(c['name'], c['current_balance'])
-                
-        for c in live_biz_cc:
-            san_name = re.sub(r'[^a-zA-Z0-9_]', '_', c['name'])
-            if st.button(f"btn_bcexp_{san_name}", key=f"trig_bcexp_{san_name}"):
-                modal_card_expense(c['name'])
-            if st.button(f"btn_bcpay_{san_name}", key=f"trig_bcpay_{san_name}"):
-                modal_card_payment(c['name'], c['current_balance'])
-
-    # 5. EXECUTING DELEGATED EVENT LISTENER
-    components.html("""
-    <script>
-    (function() {
-        var parentDoc;
-        try {
-            parentDoc = window.parent.document;
-        } catch(e) {
-            return;
-        }
-        if (!parentDoc) return;
-        
-        if (window.parent._hubClickAttached) return;
-        window.parent._hubClickAttached = true;
-        
-        parentDoc.addEventListener('click', function(e) {
-            var btn = e.target.closest('[data-trigger]');
-            if (!btn) return;
-            e.preventDefault();
-            e.stopPropagation();
-            
-            var triggerKey = btn.getAttribute('data-trigger');
-            if (!triggerKey) return;
-            
-            var targetBtn = parentDoc.querySelector('.st-key-' + triggerKey + ' button');
-            if (targetBtn) {
-                targetBtn.click();
-            }
-        }, true);
-    })();
-    </script>
-    """, height=0, width=0)
 
 # ------------------------------------------
 # TAB 2: COMMAND CENTER
@@ -1013,7 +967,7 @@ with tabs[1]:
             vendor = st.text_input("Merchant / Store", placeholder="e.g. Amazon, Shell, Trader Joe's", key="f_exp_ven")
             item_desc = st.text_input("Item Description (Optional)", placeholder="e.g. Phone case, Work lunch", key="f_exp_item")
             entry_date = st.date_input("Date", value=datetime.today(), key="f_exp_date")
-            goal_tag = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"], key="f_exp_gt")[cite: 1]
+            goal_tag = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"], key="f_exp_gt")
             
             if st.form_submit_button("Record Expense"):
                 tx_id = f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -1050,7 +1004,7 @@ with tabs[1]:
             if st.form_submit_button("Record Income"):
                 tx_id = f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}"
                 date_str = inc_date.strftime("%Y-%m-%d")
-                goal = "Baltimore 1st Home" if "4979" in inc_acc or "SECU" in inc_acc else "General Living"[cite: 1]
+                goal = "Baltimore 1st Home" if "4979" in inc_acc or "SECU" in inc_acc else "General Living"
                 
                 new_row_values = [
                     tx_id,
@@ -1138,8 +1092,8 @@ with tabs[1]:
                 else:
                     now_str = datetime.now().strftime('%Y%m%d%H%M%S')
                     date_str = trans_date.strftime("%Y-%m-%d")
-                    memo_str = f" — {trans_memo.strip()}" if memo.strip() else ""
-                    goal_tag = "Baltimore 1st Home" if ("4979" in to_trans_acc or "SECU" in to_trans_acc) else "General Living"[cite: 1]
+                    memo_str = f" — {trans_memo.strip()}" if trans_memo.strip() else ""
+                    goal_tag = "Baltimore 1st Home" if ("4979" in to_trans_acc or "SECU" in to_trans_acc) else "General Living"
                     
                     debit_row = [
                         f"TX-{now_str}-A", date_str, from_trans_acc, "Transfer", "Transfer / Sweep",
@@ -1422,7 +1376,7 @@ with tabs[2]:
 with tabs[3]:
     st.subheader("🏠 Baltimore Home Purchase Target")
     st.progress(goal_progress)
-    st.caption(f"**${total_cash:,.2f}** saved of **${HOME_GOAL:,.2f}** goal ({(goal_progress*100):.1f}%)[cite: 1]")
+    st.caption(f"**${total_cash:,.2f}** saved of **${HOME_GOAL:,.2f}** goal ({(goal_progress*100):.1f}%)")
     
     col_a, col_b = st.columns(2)
     with col_a:
@@ -1442,16 +1396,16 @@ with tabs[3]:
         
     st.markdown("""
     ---
-    **10% Down Acquisition Strategy Summary:**[cite: 1]
-    * **Target Price:** $300,000 | **Down Payment (10%):** $30,000[cite: 1]
-    * **Estimated Closing & Prepaids:** $11,000[cite: 1]
-    * **Credits & Assistance Applied:** -$21,000[cite: 1]
-      * *2.5% Buyer Agent Commission Credit:* -$7,500[cite: 1]
-      * *Maryland Mortgage Program (MMP) DPA:* -$9,000[cite: 1]
-      * *Seller Concessions (1.5%):* -$4,500[cite: 1]
-    * **Net Cash at Settlement:** $20,000[cite: 1]
-    * **Post-Closing 3-Mo Reserves:** $6,500[cite: 1]
-    * **Total Liquid Target:** **$26,500**[cite: 1]
+    **10% Down Acquisition Strategy Summary:**
+    * **Target Price:** $300,000 | **Down Payment (10%):** $30,000
+    * **Estimated Closing & Prepaids:** $11,000
+    * **Credits & Assistance Applied:** -$21,000
+      * *2.5% Buyer Agent Commission Credit:* -$7,500
+      * *Maryland Mortgage Program (MMP) DPA:* -$9,000
+      * *Seller Concessions (1.5%):* -$4,500
+    * **Net Cash at Settlement:** $20,000
+    * **Post-Closing 3-Mo Reserves:** $6,500
+    * **Total Liquid Target:** **$26,500**
     """)
 
 # ------------------------------------------
@@ -1463,7 +1417,7 @@ with tabs[4]:
 
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = [
-            {"role": "assistant", "content": "Hey! I have real-time access to your ledger, balances, and $26.5k Baltimore home purchase target. What would you like to check or plan today?"}[cite: 1]
+            {"role": "assistant", "content": "Hey! I have real-time access to your ledger, balances, and $26.5k Baltimore home purchase target. What would you like to check or plan today?"}
         ]
 
     for msg in st.session_state.chat_messages:
