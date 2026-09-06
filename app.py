@@ -62,6 +62,7 @@ st.markdown("""
         opacity: 1 !important;
         visibility: visible !important;
         white-space: nowrap !important;
+        text-decoration: none !important;
     }
     
     button[data-baseweb="tab"][aria-selected="true"], div[data-baseweb="tab-list"] button[aria-selected="true"] {
@@ -100,6 +101,7 @@ st.markdown("""
         text-align: right;
     }
     
+    /* Standard Primary Button */
     .stButton>button {
         width: 100%;
         border-radius: 10px;
@@ -107,111 +109,105 @@ st.markdown("""
         font-size: 13px;
         font-weight: 700;
         background-color: #2563EB;
-        color: white;
+        color: white !important;
         border: none;
+        text-decoration: none !important;
         box-shadow: 0 2px 6px rgba(37,99,235,0.4);
     }
 
-    /* 15% SMALLER ADD ACCOUNT BUTTON */
+    /* 15% REDUCED ADD ACCOUNT BUTTON */
     div.small-add-btn button {
         height: 32px !important;
-        font-size: 11.5px !important;
+        font-size: 11px !important;
         padding: 4px 10px !important;
         border-radius: 8px !important;
+        text-decoration: none !important;
     }
 
-    /* ZERO-GAP CLICKABLE CARD CONTAINER */
-    details.card-container {
-        background-color: #1E293B;
-        border: 1px solid #334155;
-        border-radius: 12px;
-        margin-bottom: 10px;
-        overflow: hidden;
+    /* UNIFIED CLICKABLE CARD EXPANDER */
+    div[data-testid="stExpander"] {
+        border: 1px solid #334155 !important;
+        border-radius: 12px !important;
+        background-color: #1E293B !important;
+        margin-bottom: 10px !important;
+        overflow: hidden !important;
         transition: border-color 0.2s ease;
     }
-    details.card-container[open] {
-        border-color: #3B82F6;
+    div[data-testid="stExpander"]:hover {
+        border-color: #3B82F6 !important;
     }
-    details.card-container > summary {
-        list-style: none;
-        outline: none;
-        cursor: pointer;
-        padding: 14px 16px;
-        background-color: #1E293B;
-        user-select: none;
-    }
-    details.card-container > summary::-webkit-details-marker {
-        display: none;
-    }
-    details.card-container > summary:hover {
-        background-color: #243248;
-    }
-    .card-drawer {
-        background-color: #0F172A;
-        padding: 12px 14px;
-        border-top: 1px solid #334155;
-    }
-
-    /* UNUNDERLINED BUTTONS INSIDE CARD DRAWER */
-    button.drawer-btn {
-        display: inline-block;
-        padding: 5px 12px;
-        font-size: 11px;
-        font-weight: 700;
-        border-radius: 6px;
-        text-decoration: none !important;
-        text-align: center;
-        cursor: pointer;
-        user-select: none;
-        border: 1px solid transparent;
-        line-height: 1.4;
+    div[data-testid="stExpander"] summary {
+        background-color: #1E293B !important;
+        padding: 14px 16px !important;
+        border-radius: 12px !important;
+        border: none !important;
         outline: none !important;
-        margin-right: 6px;
-        margin-bottom: 6px;
+        cursor: pointer !important;
     }
-    button.drawer-btn:focus, button.drawer-btn:active, button.drawer-btn:hover {
-        text-decoration: none !important;
-        outline: none !important;
+    div[data-testid="stExpander"] summary:hover {
+        background-color: #243248 !important;
     }
-    .drawer-btn-blue {
-        background-color: #2563EB;
-        color: #FFFFFF !important;
-        border-color: #3B82F6;
-    }
-    .drawer-btn-blue:hover {
-        background-color: #1D4ED8;
-    }
-    .drawer-btn-purple {
-        background-color: #7C3AED;
-        color: #FFFFFF !important;
-        border-color: #8B5CF6;
-    }
-    .drawer-btn-purple:hover {
-        background-color: #6D28D9;
-    }
-    .drawer-btn-emerald {
-        background-color: #059669;
-        color: #FFFFFF !important;
-        border-color: #10B981;
-    }
-    .drawer-btn-emerald:hover {
-        background-color: #047857;
-    }
-    .drawer-btn-slate {
-        background-color: #334155;
-        color: #F1F5F9 !important;
-        border-color: #475569;
-    }
-    .drawer-btn-slate:hover {
-        background-color: #475569;
-    }
-
-    /* HIDDEN NATIVE TRIGGER BUTTONS */
-    div.hidden-action-trigger {
+    div[data-testid="stExpander"] summary svg {
         display: none !important;
-        height: 0px !important;
-        width: 0px !important;
     }
+    div[data-testid="stExpander"] div[role="region"] {
+        background-color: #0F172A !important;
+        padding: 12px 14px !important;
+        border-top: 1px solid #334155 !important;
+    }
+
+    /* ACTION BUTTONS INSIDE CARDS (UNUNDERLINED) */
+    div.card-action-bar button {
+        height: 30px !important;
+        font-size: 11px !important;
+        font-weight: 700 !important;
+        border-radius: 6px !important;
+        text-decoration: none !important;
+        border: 1px solid transparent !important;
+    }
+    div.card-action-bar button * {
+        text-decoration: none !important;
+    }
+
+    div.btn-green button {
+        background-color: #059669 !important;
+        color: #FFFFFF !important;
+        border-color: #10B981 !important;
+    }
+    div.btn-green button:hover {
+        background-color: #047857 !important;
+    }
+
+    div.btn-purple button {
+        background-color: #7C3AED !important;
+        color: #FFFFFF !important;
+        border-color: #8B5CF6 !important;
+    }
+    div.btn-purple button:hover {
+        background-color: #6D28D9 !important;
+    }
+
+    div.btn-slate button {
+        background-color: #334155 !important;
+        color: #F1F5F9 !important;
+        border-color: #475569 !important;
+    }
+    div.btn-slate button:hover {
+        background-color: #475569 !important;
+    }
+
+    div.btn-blue button {
+        background-color: #2563EB !important;
+        color: #FFFFFF !important;
+        border-color: #3B82F6 !important;
+    }
+    div.btn-blue button:hover {
+        background-color: #1D4ED8 !important;
+    }
+
+    .badge-opt { background-color: #065F46; color: #6EE7B7; padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .badge-warn { background-color: #7C2D12; color: #FDBA74; padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .badge-biz { background-color: #312E81; color: #C7D2FE; padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -425,16 +421,16 @@ for c in raw_personal_cards:
     
     is_azeo = (c_name == azeo_card_name)
     if stmt_due > 0.01:
-        badge_html = '<span style="background-color:#7C2D12;color:#FDBA74;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;">⚠️ STMT DUE</span>'
+        badge_html = '<span class="badge-warn">⚠️ STMT DUE</span>'
         action_text = f"Pay ${stmt_due:.2f} stmt balance by {next_due.strftime('%b %d')}"
     elif is_azeo:
-        badge_html = '<span style="background-color:#065F46;color:#6EE7B7;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;">✅ AZEO ACTIVE (~1%)</span>'
+        badge_html = '<span class="badge-opt">✅ AZEO ACTIVE (~1%)</span>'
         action_text = f"Leave ${bal:.2f} to report on {next_close.strftime('%b %d')}"
     elif bal > 0.01:
-        badge_html = '<span style="background-color:#7C2D12;color:#FDBA74;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;">⚠️ PAY BEFORE CLOSE</span>'
+        badge_html = '<span class="badge-warn">⚠️ PAY BEFORE CLOSE</span>'
         action_text = f"Pay ${bal:.2f} by {next_close.strftime('%b %d')} to report $0"
     else:
-        badge_html = '<span style="background-color:#065F46;color:#6EE7B7;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;">✅ $0 REPORTING</span>'
+        badge_html = '<span class="badge-opt">✅ $0 REPORTING</span>'
         action_text = f"Reports $0 on {next_close.strftime('%b %d')}"
         
     card_dict = dict(c)
@@ -514,9 +510,9 @@ CATEGORY_COLORS = {
 }
 
 # ==========================================
-# 4. CARD HTML RENDERING HELPERS
+# 4. CARD TRANSACTIONS RENDERER
 # ==========================================
-def get_tx_rows_html(acc_name):
+def render_card_transactions(acc_name):
     if not df_tx.empty and "Account" in df_tx.columns:
         sub_tx = df_tx[
             (df_tx["Account"] == acc_name) | 
@@ -524,7 +520,7 @@ def get_tx_rows_html(acc_name):
         ].tail(5)
         
         if not sub_tx.empty:
-            html = "<div style='font-size:12px; font-weight:700; color:#94A3B8; margin-top:8px; margin-bottom:6px;'>Last 5 Transactions:</div>"
+            st.markdown("<div style='font-size:12px; font-weight:700; color:#94A3B8; margin-top:8px; margin-bottom:6px;'>Last 5 Transactions:</div>", unsafe_allow_html=True)
             for _, r in sub_tx.iloc[::-1].iterrows():
                 t_type = r.get("Type", "Expense")
                 amt = float(r.get("Amount", 0.0))
@@ -546,18 +542,21 @@ def get_tx_rows_html(acc_name):
                     amt_color = "#F87171"
                     prefix = "-"
                 
-                html += f"""<div style="display:flex; justify-content:space-between; align-items:center; background:#162032; border-radius:6px; padding:6px 10px; margin-bottom:4px; font-size:12px; border:1px solid #334155;"><div><span style="color:#CBD5E1; font-weight:600;">{label}</span><div style="font-size:10px; color:#64748B;">{date_val} • {t_type}</div></div><div style="font-weight:800; color:{amt_color}; font-size:13px; text-align:right;">{prefix}${amt:,.2f}</div></div>"""
-            return html
+                st.markdown(f"""
+                <div style="display:flex; justify-content:space-between; align-items:center; background:#162032; border-radius:6px; padding:6px 10px; margin-bottom:4px; font-size:12px; border:1px solid #334155;">
+                    <div>
+                        <span style="color:#CBD5E1; font-weight:600;">{label}</span>
+                        <div style="font-size:10px; color:#64748B;">{date_val} • {t_type}</div>
+                    </div>
+                    <div style="font-weight:800; color:{amt_color}; font-size:13px; text-align:right;">
+                        {prefix}${amt:,.2f}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
         else:
-            return "<div style='font-size:12px; color:#64748B; padding:6px 0;'>ℹ️ No transactions recorded for this account yet.</div>"
-    return "<div style='font-size:12px; color:#64748B; padding:6px 0;'>ℹ️ No ledger records available.</div>"
-
-def render_account_card(title, subtitle, right_val, right_sub, extra_left="", extra_right="", tx_html="", action_buttons_html=""):
-    bottom_bar = f"""<div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;"><span style="font-size:12px; color:#CBD5E1;">{extra_left}</span><div>{extra_right}</div></div>""" if (extra_left or extra_right) else ""
-    val_color = '#38BDF8' if '$' in right_val and '.' in right_val else '#F8FAFC'
-    
-    card_html = f"""<details class="card-container"><summary><div style="display:flex; justify-content:space-between; align-items:center;"><div><span style="font-weight:700; font-size:15px; color:#F8FAFC;">{title}</span><div style="font-size:12px; color:#94A3B8;">{subtitle}</div></div><div style="text-align:right;"><span style="font-weight:800; font-size:18px; color:{val_color};">{right_val}</span><div style="font-size:11px; color:#64748B;">{right_sub}</div></div></div>{bottom_bar}</summary><div class="card-drawer">{action_buttons_html}{tx_html}</div></details>"""
-    st.markdown(card_html, unsafe_allow_html=True)
+            st.caption("ℹ️ No transactions recorded for this account yet.")
+    else:
+        st.caption("ℹ️ No ledger records available.")
 
 # ==========================================
 # 5. DYNAMIC TRANSACTION MODALS
@@ -587,7 +586,7 @@ def modal_bank_income(acc_name):
                 float(inc_amt),
                 gt,
                 memo,
-                "Card Quick Entry"
+                "Card Direct Entry"
             ]
             try:
                 append_tx_to_sheet(row)
@@ -652,7 +651,7 @@ def modal_bank_expense(acc_name):
                 float(amt),
                 gt,
                 desc,
-                "Card Quick Entry"
+                "Card Direct Entry"
             ]
             try:
                 append_tx_to_sheet(row)
@@ -683,7 +682,7 @@ def modal_card_expense(card_name):
                 float(amt),
                 gt,
                 desc,
-                "Card Quick Entry"
+                "Card Direct Entry"
             ]
             try:
                 append_tx_to_sheet(row)
@@ -712,7 +711,7 @@ def modal_card_payment(card_name, current_balance):
                 float(pay_amt),
                 "General Living",
                 memo,
-                "Card Quick Entry"
+                "Card Direct Entry"
             ]
             try:
                 append_tx_to_sheet(row)
@@ -823,37 +822,44 @@ with tabs[0]:
     for acc in live_cash_registry:
         bal = acc["current_balance"]
         pct_of_total = (bal / total_cash) * 100 if total_cash > 0 else 0.0
-        tx_rows = get_tx_rows_html(acc['name'])
-        sanitized_name = acc['name'].replace(' ', '_')
         
-        btn_html = f"""
-        <div style="display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap;">
-            <button class="drawer-btn drawer-btn-emerald" onclick="window.parent.document.getElementById('btn_trigger_inc_{sanitized_name}').click();">💵 Deposit</button>
-            <button class="drawer-btn drawer-btn-purple" onclick="window.parent.document.getElementById('btn_trigger_trans_{sanitized_name}').click();">🔁 Transfer</button>
-            <button class="drawer-btn drawer-btn-slate" onclick="window.parent.document.getElementById('btn_trigger_b_exp_{sanitized_name}').click();">💸 Expense</button>
-        </div>
-        """
-        
-        render_account_card(
-            title=acc['name'],
-            subtitle=acc['role'],
-            right_val=f"${bal:,.2f}",
-            right_sub=f"{pct_of_total:.1f}% of cash",
-            tx_html=tx_rows,
-            action_buttons_html=btn_html
-        )
-        
-        # Hidden Streamlit native button triggers invoked directly by onclick
-        st.markdown(f"""
-        <div class="hidden-action-trigger">
-        """, unsafe_allow_html=True)
-        if st.button(" ", key=f"btn_trigger_inc_{sanitized_name}"):
-            modal_bank_income(acc['name'])
-        if st.button(" ", key=f"btn_trigger_trans_{sanitized_name}"):
-            modal_bank_transfer(acc['name'])
-        if st.button(" ", key=f"btn_trigger_b_exp_{sanitized_name}"):
-            modal_bank_expense(acc['name'])
-        st.markdown("</div>", unsafe_allow_html=True)
+        expander_label = f"{acc['name']} — ${bal:,.2f} ({pct_of_total:.1f}%)"
+        with st.expander(expander_label, expanded=False):
+            # Card Top Header Rendered Inside Expander
+            st.markdown(f"""
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <div>
+                    <span style="font-weight:700; font-size:16px; color:#F8FAFC;">{acc['name']}</span>
+                    <div style="font-size:12px; color:#94A3B8;">{acc['role']}</div>
+                </div>
+                <div style="text-align:right;">
+                    <span style="font-weight:800; font-size:18px; color:#38BDF8;">${bal:,.2f}</span>
+                    <div style="font-size:11px; color:#64748B;">{pct_of_total:.1f}% of cash</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Action Buttons Row
+            st.markdown('<div class="card-action-bar">', unsafe_allow_html=True)
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                st.markdown('<div class="btn-green">', unsafe_allow_html=True)
+                if st.button("💵 Deposit", key=f"btn_d_{acc['name']}"):
+                    modal_bank_income(acc['name'])
+                st.markdown('</div>', unsafe_allow_html=True)
+            with c2:
+                st.markdown('<div class="btn-purple">', unsafe_allow_html=True)
+                if st.button("🔁 Transfer", key=f"btn_t_{acc['name']}"):
+                    modal_bank_transfer(acc['name'])
+                st.markdown('</div>', unsafe_allow_html=True)
+            with c3:
+                st.markdown('<div class="btn-slate">', unsafe_allow_html=True)
+                if st.button("💸 Expense", key=f"btn_e_{acc['name']}"):
+                    modal_bank_expense(acc['name'])
+                st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            render_card_transactions(acc['name'])
 
     st.divider()
 
@@ -865,35 +871,42 @@ with tabs[0]:
         bal = c["current_balance"]
         limit = c["limit"]
         util = c["utilization"]
-        tx_rows = get_tx_rows_html(c['name'])
-        sanitized_name = c['name'].replace(' ', '_')
         
-        btn_html = f"""
-        <div style="display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap;">
-            <button class="drawer-btn drawer-btn-blue" onclick="window.parent.document.getElementById('btn_trigger_c_exp_{sanitized_name}').click();">💳 Charge</button>
-            <button class="drawer-btn drawer-btn-purple" onclick="window.parent.document.getElementById('btn_trigger_c_pay_{sanitized_name}').click();">🔄 Pay Card</button>
-        </div>
-        """
-        
-        render_account_card(
-            title=c['name'],
-            subtitle=f"Limit: ${limit:,.0f} | Closes: {c['close_str']}",
-            right_val=f"${bal:.2f}",
-            right_sub=f"({util:.1f}%)",
-            extra_left=c['action_text'],
-            extra_right=c['badge_html'],
-            tx_html=tx_rows,
-            action_buttons_html=btn_html
-        )
-        
-        st.markdown(f"""
-        <div class="hidden-action-trigger">
-        """, unsafe_allow_html=True)
-        if st.button(" ", key=f"btn_trigger_c_exp_{sanitized_name}"):
-            modal_card_expense(c['name'])
-        if st.button(" ", key=f"btn_trigger_c_pay_{sanitized_name}"):
-            modal_card_payment(c['name'], bal)
-        st.markdown("</div>", unsafe_allow_html=True)
+        expander_label = f"{c['name']} — ${bal:.2f} ({util:.1f}%)"
+        with st.expander(expander_label, expanded=False):
+            st.markdown(f"""
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
+                <div>
+                    <span style="font-weight:700; font-size:16px; color:#F8FAFC;">{c['name']}</span>
+                    <div style="font-size:12px; color:#64748B;">Limit: ${limit:,.0f} | Closes: {c['close_str']}</div>
+                </div>
+                <div style="text-align:right;">
+                    <span style="font-weight:800; font-size:18px; color:#F8FAFC;">${bal:.2f}</span>
+                    <span style="font-size:12px; font-weight:700; color:#94A3B8; margin-left:4px;">({util:.1f}%)</span>
+                </div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <span style="font-size:12px; color:#CBD5E1;">{c['action_text']}</span>
+                <div>{c['badge_html']}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Action Buttons Row
+            st.markdown('<div class="card-action-bar">', unsafe_allow_html=True)
+            col_b1, col_b2 = st.columns(2)
+            with col_b1:
+                st.markdown('<div class="btn-blue">', unsafe_allow_html=True)
+                if st.button("💳 Charge", key=f"btn_c_{c['name']}"):
+                    modal_card_expense(c['name'])
+                st.markdown('</div>', unsafe_allow_html=True)
+            with col_b2:
+                st.markdown('<div class="btn-purple">', unsafe_allow_html=True)
+                if st.button("🔄 Pay Card", key=f"btn_p_{c['name']}"):
+                    modal_card_payment(c['name'], bal)
+                st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            render_card_transactions(c['name'])
 
     st.divider()
 
@@ -903,35 +916,41 @@ with tabs[0]:
     # 3. BUSINESS CREDIT CARDS
     for c in live_biz_cc:
         bal = c["current_balance"]
-        tx_rows = get_tx_rows_html(c['name'])
-        sanitized_name = c['name'].replace(' ', '_')
         
-        btn_html = f"""
-        <div style="display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap;">
-            <button class="drawer-btn drawer-btn-blue" onclick="window.parent.document.getElementById('btn_trigger_c_exp_{sanitized_name}').click();">💳 Charge</button>
-            <button class="drawer-btn drawer-btn-purple" onclick="window.parent.document.getElementById('btn_trigger_c_pay_{sanitized_name}').click();">🔄 Pay Card</button>
-        </div>
-        """
-        
-        render_account_card(
-            title=c['name'],
-            subtitle="Business Card",
-            right_val=f"${bal:.2f}",
-            right_sub="",
-            extra_left=f"Due: {c['due_str']} | Closes: {c['close_str']}",
-            extra_right='<span style="background-color:#312E81;color:#C7D2FE;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;">💼 BUSINESS</span>',
-            tx_html=tx_rows,
-            action_buttons_html=btn_html
-        )
-        
-        st.markdown(f"""
-        <div class="hidden-action-trigger">
-        """, unsafe_allow_html=True)
-        if st.button(" ", key=f"btn_trigger_c_exp_{sanitized_name}"):
-            modal_card_expense(c['name'])
-        if st.button(" ", key=f"btn_trigger_c_pay_{sanitized_name}"):
-            modal_card_payment(c['name'], bal)
-        st.markdown("</div>", unsafe_allow_html=True)
+        expander_label = f"{c['name']} — ${bal:.2f}"
+        with st.expander(expander_label, expanded=False):
+            st.markdown(f"""
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
+                <div>
+                    <span style="font-weight:700; font-size:16px; color:#F8FAFC;">{c['name']}</span>
+                    <div style="font-size:12px; color:#64748B;">Business Card</div>
+                </div>
+                <div style="text-align:right;">
+                    <span style="font-weight:800; font-size:18px; color:#F8FAFC;">${bal:.2f}</span>
+                </div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <span style="font-size:12px; color:#CBD5E1;">Due: {c['due_str']} | Closes: {c['close_str']}</span>
+                <div><span class="badge-biz">💼 BUSINESS</span></div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Action Buttons Row
+            st.markdown('<div class="card-action-bar">', unsafe_allow_html=True)
+            col_bb1, col_bb2 = st.columns(2)
+            with col_bb1:
+                st.markdown('<div class="btn-blue">', unsafe_allow_html=True)
+                if st.button("💳 Charge", key=f"btn_c_{c['name']}"):
+                    modal_card_expense(c['name'])
+                st.markdown('</div>', unsafe_allow_html=True)
+            with col_bb2:
+                st.markdown('<div class="btn-purple">', unsafe_allow_html=True)
+                if st.button("🔄 Pay Card", key=f"btn_p_{c['name']}"):
+                    modal_card_payment(c['name'], bal)
+                st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            render_card_transactions(c['name'])
 
 # ------------------------------------------
 # TAB 2: COMMAND CENTER
@@ -1371,7 +1390,7 @@ with tabs[2]:
 with tabs[3]:
     st.subheader("🏠 Baltimore Home Purchase Target")
     st.progress(goal_progress)
-    st.caption(f"**${total_cash:,.2f}** saved of **${HOME_GOAL:,.2f}** goal ({(goal_progress*100):.1f}%)")
+    st.caption(f"**${total_cash:,.2f}** saved of **${HOME_GOAL:,.2f}** goal ({(goal_progress*100):.1f}%)[cite: 1]")
     
     col_a, col_b = st.columns(2)
     with col_a:
@@ -1392,15 +1411,15 @@ with tabs[3]:
     st.markdown("""
     ---
     **10% Down Acquisition Strategy Summary:**
-    * **Target Price:** $300,000 | **Down Payment (10%):** $30,000
-    * **Estimated Closing & Prepaids:** $11,000
-    * **Credits & Assistance Applied:** -$21,000
-      * *2.5% Buyer Agent Commission Credit:* -$7,500
-      * *Maryland Mortgage Program (MMP) DPA:* -$9,000
-      * *Seller Concessions (1.5%):* -$4,500
-    * **Net Cash at Settlement:** $20,000
-    * **Post-Closing 3-Mo Reserves:** $6,500
-    * **Total Liquid Target:** **$26,500**
+    * **Target Price:** $300,000 | **Down Payment (10%):** $30,000[cite: 1]
+    * **Estimated Closing & Prepaids:** $11,000[cite: 1]
+    * **Credits & Assistance Applied:** -$21,000[cite: 1]
+      * *2.5% Buyer Agent Commission Credit:* -$7,500[cite: 1]
+      * *Maryland Mortgage Program (MMP) DPA:* -$9,000[cite: 1]
+      * *Seller Concessions (1.5%):* -$4,500[cite: 1]
+    * **Net Cash at Settlement:** $20,000[cite: 1]
+    * **Post-Closing 3-Mo Reserves:** $6,500[cite: 1]
+    * **Total Liquid Target:** **$26,500**[cite: 1]
     """)
 
 # ------------------------------------------
@@ -1434,7 +1453,7 @@ with tabs[4]:
         - Total Personal CC Debt: ${personal_cc_debt:,.2f} across ${personal_cc_limit:,.2f} limit (Overall Util: {personal_utilization:.2f}%)
         - Business CC Debt: ${biz_cc_debt:,.2f} (Chase 0431)
         - Net Liquid Cash: ${net_liquid_cash:,.2f}
-        - 1st Home Goal: $26,500 target by March 1, 2027 (${total_cash:,.2f} saved so far, ${remaining_goal:,.2f} remaining).
+        - 1st Home Goal: $26,500 target by March 1, 2027 (${total_cash:,.2f} saved so far, ${remaining_goal:,.2f} remaining)[cite: 1].
         - Dynamic AZEO Card: {azeo_card_name}.
         - Recent 15 Ledger Entries: {recent_tx_summary}
 
