@@ -112,6 +112,14 @@ st.markdown("""
         box-shadow: 0 2px 6px rgba(37,99,235,0.4);
     }
 
+    /* 15% SMALLER ADD ACCOUNT BUTTON */
+    div.small-add-btn button {
+        height: 32px !important;
+        font-size: 11.5px !important;
+        padding: 4px 10px !important;
+        border-radius: 8px !important;
+    }
+
     /* ZERO-GAP CLICKABLE CARD CONTAINER */
     details.card-container {
         background-color: #1E293B;
@@ -144,19 +152,26 @@ st.markdown("""
         border-top: 1px solid #334155;
     }
 
-    /* QUICK ACTION BUTTONS INSIDE CARD DRAWER */
-    .drawer-btn {
+    /* UNUNDERLINED BUTTONS INSIDE CARD DRAWER */
+    button.drawer-btn {
         display: inline-block;
-        padding: 6px 12px;
+        padding: 5px 12px;
         font-size: 11px;
         font-weight: 700;
         border-radius: 6px;
-        text-decoration: none;
+        text-decoration: none !important;
         text-align: center;
         cursor: pointer;
-        transition: background-color 0.15s ease;
         user-select: none;
         border: 1px solid transparent;
+        line-height: 1.4;
+        outline: none !important;
+        margin-right: 6px;
+        margin-bottom: 6px;
+    }
+    button.drawer-btn:focus, button.drawer-btn:active, button.drawer-btn:hover {
+        text-decoration: none !important;
+        outline: none !important;
     }
     .drawer-btn-blue {
         background-color: #2563EB;
@@ -189,6 +204,13 @@ st.markdown("""
     }
     .drawer-btn-slate:hover {
         background-color: #475569;
+    }
+
+    /* HIDDEN NATIVE TRIGGER BUTTONS */
+    div.hidden-action-trigger {
+        display: none !important;
+        height: 0px !important;
+        width: 0px !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -736,30 +758,6 @@ def open_new_account_dialog():
                 except Exception as err:
                     st.error(f"Error saving account: {err}")
 
-# Check query params to open modals triggered from inside HTML card drawers
-params = st.query_params
-if "action" in params and "acc" in params:
-    act = params["action"]
-    target = params["acc"]
-    st.query_params.clear()
-    
-    if act == "inc":
-        modal_bank_income(target)
-    elif act == "trans":
-        modal_bank_transfer(target)
-    elif act == "b_exp":
-        modal_bank_expense(target)
-    elif act == "c_exp":
-        modal_card_expense(target)
-    elif act == "c_pay":
-        # Find matching balance
-        matching_bal = 0.0
-        for c in (live_personal_cc + live_biz_cc):
-            if c["name"] == target:
-                matching_bal = c["current_balance"]
-                break
-        modal_card_payment(target, matching_bal)
-
 # ==========================================
 # 6. AI EXECUTIVE SUMMARY & KEY FETCHER
 # ==========================================
@@ -793,20 +791,152 @@ def fetch_ai_insights_cached(net_cash, tot_cash, p_debt, b_debt, p_util, azeo_ca
     return f"💡 **Executive Snapshot:** Net liquid cash stands at \\${net_cash:,.2f} with credit utilization optimized at {p_util:.2f}%. Maintain {azeo_card} at ~\\$10 for your AZEO boost while clearing non-AZEO cards to \\$0."
 
 # ==========================================
-# 7. APP TABS & UI RENDERING
+# 7. APP TABS & UI RENDERING (ACCOUNTS & CREDIT HUB AS DEFAULT)
 # ==========================================
 tabs = st.tabs([
-    "⚡ Command Center", 
     "💳 Accounts & Credit Hub", 
+    "⚡ Command Center", 
     "📊 Analytics & Charts", 
     "🏠 Home Goal", 
     "💬 AI Advisor"
 ])
 
 # ------------------------------------------
-# TAB 1: COMMAND CENTER
+# TAB 1: ACCOUNTS & CREDIT HUB (DEFAULT LOAD PAGE)
 # ------------------------------------------
 with tabs[0]:
+    col_h1, col_h2 = st.columns([3.5, 1.5])
+    with col_h1:
+        st.markdown(f"""
+        <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:12px;">
+            <h3 style="margin:0; font-size:1.25rem; font-weight:700; color:#F8FAFC;">🏦 Cash & Checking Spread</h3>
+            <span style="font-size:1.15rem; font-weight:800; color:#38BDF8;">${total_cash:,.2f}</span>
+        </div>
+        """, unsafe_allow_html=True)
+    with col_h2:
+        st.markdown('<div class="small-add-btn">', unsafe_allow_html=True)
+        if st.button("➕ Add Account", key="btn_open_add_account"):
+            open_new_account_dialog()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # 1. CASH / BANK CARDS
+    for acc in live_cash_registry:
+        bal = acc["current_balance"]
+        pct_of_total = (bal / total_cash) * 100 if total_cash > 0 else 0.0
+        tx_rows = get_tx_rows_html(acc['name'])
+        sanitized_name = acc['name'].replace(' ', '_')
+        
+        btn_html = f"""
+        <div style="display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap;">
+            <button class="drawer-btn drawer-btn-emerald" onclick="window.parent.document.getElementById('btn_trigger_inc_{sanitized_name}').click();">💵 Deposit</button>
+            <button class="drawer-btn drawer-btn-purple" onclick="window.parent.document.getElementById('btn_trigger_trans_{sanitized_name}').click();">🔁 Transfer</button>
+            <button class="drawer-btn drawer-btn-slate" onclick="window.parent.document.getElementById('btn_trigger_b_exp_{sanitized_name}').click();">💸 Expense</button>
+        </div>
+        """
+        
+        render_account_card(
+            title=acc['name'],
+            subtitle=acc['role'],
+            right_val=f"${bal:,.2f}",
+            right_sub=f"{pct_of_total:.1f}% of cash",
+            tx_html=tx_rows,
+            action_buttons_html=btn_html
+        )
+        
+        # Hidden Streamlit native button triggers invoked directly by onclick
+        st.markdown(f"""
+        <div class="hidden-action-trigger">
+        """, unsafe_allow_html=True)
+        if st.button(" ", key=f"btn_trigger_inc_{sanitized_name}"):
+            modal_bank_income(acc['name'])
+        if st.button(" ", key=f"btn_trigger_trans_{sanitized_name}"):
+            modal_bank_transfer(acc['name'])
+        if st.button(" ", key=f"btn_trigger_b_exp_{sanitized_name}"):
+            modal_bank_expense(acc['name'])
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.divider()
+
+    st.subheader("💳 Personal Credit Cards (AZEO Strategy)")
+    st.caption(f"Overall Personal Util: **{personal_utilization:.2f}%** (${personal_cc_debt:,.2f} / ${personal_cc_limit:,.2f}). Active AZEO: **{azeo_card_name}**.")
+    
+    # 2. PERSONAL CREDIT CARDS
+    for c in live_personal_cc:
+        bal = c["current_balance"]
+        limit = c["limit"]
+        util = c["utilization"]
+        tx_rows = get_tx_rows_html(c['name'])
+        sanitized_name = c['name'].replace(' ', '_')
+        
+        btn_html = f"""
+        <div style="display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap;">
+            <button class="drawer-btn drawer-btn-blue" onclick="window.parent.document.getElementById('btn_trigger_c_exp_{sanitized_name}').click();">💳 Charge</button>
+            <button class="drawer-btn drawer-btn-purple" onclick="window.parent.document.getElementById('btn_trigger_c_pay_{sanitized_name}').click();">🔄 Pay Card</button>
+        </div>
+        """
+        
+        render_account_card(
+            title=c['name'],
+            subtitle=f"Limit: ${limit:,.0f} | Closes: {c['close_str']}",
+            right_val=f"${bal:.2f}",
+            right_sub=f"({util:.1f}%)",
+            extra_left=c['action_text'],
+            extra_right=c['badge_html'],
+            tx_html=tx_rows,
+            action_buttons_html=btn_html
+        )
+        
+        st.markdown(f"""
+        <div class="hidden-action-trigger">
+        """, unsafe_allow_html=True)
+        if st.button(" ", key=f"btn_trigger_c_exp_{sanitized_name}"):
+            modal_card_expense(c['name'])
+        if st.button(" ", key=f"btn_trigger_c_pay_{sanitized_name}"):
+            modal_card_payment(c['name'], bal)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.divider()
+
+    st.subheader("💼 Business Credit Cards")
+    st.caption("Business cards do not report to your personal credit score.")
+    
+    # 3. BUSINESS CREDIT CARDS
+    for c in live_biz_cc:
+        bal = c["current_balance"]
+        tx_rows = get_tx_rows_html(c['name'])
+        sanitized_name = c['name'].replace(' ', '_')
+        
+        btn_html = f"""
+        <div style="display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap;">
+            <button class="drawer-btn drawer-btn-blue" onclick="window.parent.document.getElementById('btn_trigger_c_exp_{sanitized_name}').click();">💳 Charge</button>
+            <button class="drawer-btn drawer-btn-purple" onclick="window.parent.document.getElementById('btn_trigger_c_pay_{sanitized_name}').click();">🔄 Pay Card</button>
+        </div>
+        """
+        
+        render_account_card(
+            title=c['name'],
+            subtitle="Business Card",
+            right_val=f"${bal:.2f}",
+            right_sub="",
+            extra_left=f"Due: {c['due_str']} | Closes: {c['close_str']}",
+            extra_right='<span style="background-color:#312E81;color:#C7D2FE;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;">💼 BUSINESS</span>',
+            tx_html=tx_rows,
+            action_buttons_html=btn_html
+        )
+        
+        st.markdown(f"""
+        <div class="hidden-action-trigger">
+        """, unsafe_allow_html=True)
+        if st.button(" ", key=f"btn_trigger_c_exp_{sanitized_name}"):
+            modal_card_expense(c['name'])
+        if st.button(" ", key=f"btn_trigger_c_pay_{sanitized_name}"):
+            modal_card_payment(c['name'], bal)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+# ------------------------------------------
+# TAB 2: COMMAND CENTER
+# ------------------------------------------
+with tabs[1]:
     st.markdown(f"""
     <div class="hero-card">
         <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -975,103 +1105,6 @@ with tabs[0]:
                         st.rerun()
                     except Exception as err:
                         st.error(f"❌ Write Error: {str(err)}\n{traceback.format_exc()}")
-
-# ------------------------------------------
-# TAB 2: ACCOUNTS & CREDIT HUB (PRESERVED ZERO-GAP CARDS WITH QUICK ACTIONS)
-# ------------------------------------------
-with tabs[1]:
-    col_h1, col_h2 = st.columns([3, 1])
-    with col_h1:
-        st.markdown(f"""
-        <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:12px;">
-            <h3 style="margin:0; font-size:1.25rem; font-weight:700; color:#F8FAFC;">🏦 Cash & Checking Spread</h3>
-            <span style="font-size:1.15rem; font-weight:800; color:#38BDF8;">${total_cash:,.2f}</span>
-        </div>
-        """, unsafe_allow_html=True)
-    with col_h2:
-        if st.button("➕ Add Account", key="btn_open_add_account"):
-            open_new_account_dialog()
-
-    for acc in live_cash_registry:
-        bal = acc["current_balance"]
-        pct_of_total = (bal / total_cash) * 100 if total_cash > 0 else 0.0
-        tx_rows = get_tx_rows_html(acc['name'])
-        
-        # Action bar buttons on top of transactions
-        btn_html = f"""
-        <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
-            <a class="drawer-btn drawer-btn-emerald" href="?action=inc&acc={acc['name']}" target="_self">💵 Deposit</a>
-            <a class="drawer-btn drawer-btn-purple" href="?action=trans&acc={acc['name']}" target="_self">🔁 Transfer</a>
-            <a class="drawer-btn drawer-btn-slate" href="?action=b_exp&acc={acc['name']}" target="_self">💸 Expense</a>
-        </div>
-        """
-        
-        render_account_card(
-            title=acc['name'],
-            subtitle=acc['role'],
-            right_val=f"${bal:,.2f}",
-            right_sub=f"{pct_of_total:.1f}% of cash",
-            tx_html=tx_rows,
-            action_buttons_html=btn_html
-        )
-
-    st.divider()
-
-    st.subheader("💳 Personal Credit Cards (AZEO Strategy)")
-    st.caption(f"Overall Personal Util: **{personal_utilization:.2f}%** (${personal_cc_debt:,.2f} / ${personal_cc_limit:,.2f}). Active AZEO: **{azeo_card_name}**.")
-    
-    for c in live_personal_cc:
-        bal = c["current_balance"]
-        limit = c["limit"]
-        util = c["utilization"]
-        tx_rows = get_tx_rows_html(c['name'])
-        
-        # Action bar buttons on top of transactions
-        btn_html = f"""
-        <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
-            <a class="drawer-btn drawer-btn-blue" href="?action=c_exp&acc={c['name']}" target="_self">💳 Charge</a>
-            <a class="drawer-btn drawer-btn-purple" href="?action=c_pay&acc={c['name']}" target="_self">🔄 Pay Card</a>
-        </div>
-        """
-        
-        render_account_card(
-            title=c['name'],
-            subtitle=f"Limit: ${limit:,.0f} | Closes: {c['close_str']}",
-            right_val=f"${bal:.2f}",
-            right_sub=f"({util:.1f}%)",
-            extra_left=c['action_text'],
-            extra_right=c['badge_html'],
-            tx_html=tx_rows,
-            action_buttons_html=btn_html
-        )
-
-    st.divider()
-
-    st.subheader("💼 Business Credit Cards")
-    st.caption("Business cards do not report to your personal credit score.")
-    
-    for c in live_biz_cc:
-        bal = c["current_balance"]
-        tx_rows = get_tx_rows_html(c['name'])
-        
-        # Action bar buttons on top of transactions
-        btn_html = f"""
-        <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
-            <a class="drawer-btn drawer-btn-blue" href="?action=c_exp&acc={c['name']}" target="_self">💳 Charge</a>
-            <a class="drawer-btn drawer-btn-purple" href="?action=c_pay&acc={c['name']}" target="_self">🔄 Pay Card</a>
-        </div>
-        """
-        
-        render_account_card(
-            title=c['name'],
-            subtitle="Business Card",
-            right_val=f"${bal:.2f}",
-            right_sub="",
-            extra_left=f"Due: {c['due_str']} | Closes: {c['close_str']}",
-            extra_right='<span style="background-color:#312E81;color:#C7D2FE;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;">💼 BUSINESS</span>',
-            tx_html=tx_rows,
-            action_buttons_html=btn_html
-        )
 
 # ------------------------------------------
 # TAB 3: ANALYTICS & CHARTS (HOLE = 0.55 DONUT ENGINE)
