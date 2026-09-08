@@ -1023,39 +1023,42 @@ with tabs[0]:
             if st.button(f"btn_bcpay_{san_name}", key=f"trig_bcpay_{san_name}"):
                 modal_card_payment(c['name'], c['current_balance'])
 
-        # 5. DELEGATED EVENT LISTENER FOR CARD DRAWER BUTTONS ONLY
-        components.html("""
-        <script>
-        (function() {
-            var parentDoc;
-            try {
-                parentDoc = window.parent.document;
-            } catch(e) {
-                return;
+    # 5. DELEGATED EVENT LISTENER
+    components.html("""
+    <script>
+    (function() {
+        var parentDoc;
+        try {
+            parentDoc = window.parent.document;
+        } catch(e) {
+            return;
+        }
+        if (!parentDoc) return;
+        
+        if (window.parent._hubListenersV4Attached) return;
+        window.parent._hubListenersV4Attached = true;
+        
+        // --- 1. CARD DRAWER QUICK-ACTION BUTTONS ---
+        parentDoc.addEventListener('click', function(e) {
+            var btn = e.target.closest('[data-trigger]');
+            if (!btn) return;
+            e.preventDefault();
+            e.stopPropagation();
+            
+            var triggerKey = btn.getAttribute('data-trigger');
+            if (!triggerKey) return;
+            
+            var targetBtn = parentDoc.querySelector('.st-key-' + triggerKey + ' button');
+            if (targetBtn) {
+                targetBtn.click();
             }
-            if (!parentDoc) return;
-            
-            if (window.parent._hubListenersV4Attached) return;
-            window.parent._hubListenersV4Attached = true;
-            
-            // CARD DRAWER QUICK-ACTION BUTTONS ONLY (leave native dropdowns alone)
-            parentDoc.addEventListener('click', function(e) {
-                var btn = e.target.closest('[data-trigger]');
-                if (!btn) return;
-                e.preventDefault();
-                e.stopPropagation();
-                
-                var triggerKey = btn.getAttribute('data-trigger');
-                if (!triggerKey) return;
-                
-                var targetBtn = parentDoc.querySelector('.st-key-' + triggerKey + ' button');
-                if (targetBtn) {
-                    targetBtn.click();
-                }
-            }, true);
-        })();
-        </script>
-        """, height=0, width=0)
+        }, true);
+        
+        // Parts 2 & 3 (Desktop Dropdown Fix & Mobile Touch Fix) have been removed. 
+        // Streamlit natively handles these dropdowns without needing manual click forcing.
+    })();
+    </script>
+    """, height=0, width=0)
 
 # ------------------------------------------
 # TAB 2: COMMAND CENTER
