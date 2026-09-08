@@ -115,7 +115,7 @@ st.markdown("""
         box-shadow: 0 2px 6px rgba(37,99,235,0.4);
     }
 
-    /* 20% SMALLER ADD ACCOUNT BUTTON WITH TIGHTER VERTICAL ALIGNMENT */
+    /* 20% SMALLER ADD ACCOUNT BUTTON */
     div.small-add-btn {
         display: flex;
         justify-content: flex-end;
@@ -132,7 +132,7 @@ st.markdown("""
         white-space: nowrap !important;
     }
 
-    /* EXACT ORIGINAL CARD CONTAINER */
+    /* CARD CONTAINER */
     details.card-container {
         background-color: #1E293B;
         border: 1px solid #334155;
@@ -164,7 +164,7 @@ st.markdown("""
         border-top: 1px solid #334155;
     }
 
-    /* ACTION BUTTONS INSIDE CARDS (UNUNDERLINED) */
+    /* ACTION BUTTONS INSIDE CARDS */
     button.drawer-btn {
         display: inline-block;
         padding: 6px 12px;
@@ -270,6 +270,20 @@ st.markdown("""
         text-align: center !important;
         max-width: 90% !important;
         pointer-events: auto;
+    }
+
+    /* BASEWEB DROPDOWN / POPOVER MOBILE & DESKTOP ENHANCEMENTS */
+    div[data-baseweb="popover"] {
+        z-index: 99999999 !important;
+    }
+    div[data-baseweb="popover"] ul {
+        -webkit-overflow-scrolling: touch !important;
+    }
+    div[data-baseweb="popover"] li[role="option"] {
+        cursor: pointer !important;
+        -webkit-tap-highlight-color: rgba(59, 130, 246, 0.3) !important;
+        touch-action: manipulation !important;
+        user-select: none !important;
     }
 
     .badge-opt { background-color: #065F46; color: #6EE7B7; padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
@@ -425,7 +439,7 @@ def get_accounts_registry():
 df_tx = get_ledger_data()
 df_registry = get_accounts_registry()
 
-# 1. DYNAMIC CASH BALANCES
+# 1. DYNAMIC CASH BALANCES (WITH TRANSFERS INCLUDED)
 live_cash_registry = []
 cash_df = df_registry[df_registry["Account_Type"] == "Cash / Bank"]
 
@@ -1016,7 +1030,7 @@ with tabs[0]:
             if st.button(f"btn_bcpay_{san_name}", key=f"trig_bcpay_{san_name}"):
                 modal_card_payment(c['name'], c['current_balance'])
 
-    # 5. DELEGATED EVENT LISTENER
+    # 5. HIGH-SPEED EVENT DELEGATOR & MODAL POPOVER COMPATIBILITY BRIDGE
     components.html("""
     <script>
     (function() {
@@ -1028,23 +1042,87 @@ with tabs[0]:
         }
         if (!parentDoc) return;
         
-        if (window.parent._hubClickAttached) return;
-        window.parent._hubClickAttached = true;
-        
-        parentDoc.addEventListener('click', function(e) {
-            var btn = e.target.closest('[data-trigger]');
-            if (!btn) return;
-            e.preventDefault();
-            e.stopPropagation();
-            
-            var triggerKey = btn.getAttribute('data-trigger');
-            if (!triggerKey) return;
-            
-            var targetBtn = parentDoc.querySelector('.st-key-' + triggerKey + ' button');
-            if (targetBtn) {
-                targetBtn.click();
-            }
-        }, true);
+        // 1. ATTACH CARD TRIGGER BUTTON DISPATCHER
+        if (!window.parent._hubClickAttached) {
+            window.parent._hubClickAttached = true;
+            parentDoc.addEventListener('click', function(e) {
+                var btn = e.target.closest('[data-trigger]');
+                if (!btn) return;
+                e.preventDefault();
+                e.stopPropagation();
+                
+                var triggerKey = btn.getAttribute('data-trigger');
+                if (!triggerKey) return;
+                
+                var targetBtn = parentDoc.querySelector('.st-key-' + triggerKey + ' button');
+                if (targetBtn) {
+                    targetBtn.click();
+                }
+            }, true);
+        }
+
+        // 2. ATTACH POPUP MODAL DROPDOWN (SELECTBOX) FIX
+        if (!window.parent._hubSelectFixAttached) {
+            window.parent._hubSelectFixAttached = true;
+
+            // Stop focus-trap from stealing focus when popover options are clicked
+            parentDoc.addEventListener('focusin', function(e) {
+                if (e.target && e.target.closest && e.target.closest('div[data-baseweb="popover"]')) {
+                    e.stopImmediatePropagation();
+                }
+            }, true);
+
+            // Immediate desktop 1-click select on mousedown
+            parentDoc.addEventListener('mousedown', function(e) {
+                var opt = e.target.closest('li[role="option"]');
+                if (opt) {
+                    opt.click();
+                }
+            }, true);
+
+            // Touch tracking for mobile to prevent accidental selection during touch-scrolling
+            var touchStartX = 0;
+            var touchStartY = 0;
+            var isTouchMove = false;
+
+            parentDoc.addEventListener('touchstart', function(e) {
+                var opt = e.target.closest('li[role="option"]');
+                if (opt && e.touches.length > 0) {
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                    isTouchMove = false;
+                }
+            }, { capture: true, passive: true });
+
+            parentDoc.addEventListener('touchmove', function(e) {
+                if (e.touches.length > 0) {
+                    var dx = Math.abs(e.touches[0].clientX - touchStartX);
+                    var dy = Math.abs(e.touches[0].clientY - touchStartY);
+                    if (dx > 10 || dy > 10) {
+                        isTouchMove = true;
+                    }
+                }
+            }, { capture: true, passive: true });
+
+            parentDoc.addEventListener('touchend', function(e) {
+                var opt = e.target.closest('li[role="option"]');
+                if (opt && !isTouchMove) {
+                    opt.click();
+                }
+            }, { capture: true, passive: true });
+
+            // Mark dropdown popovers as focus-lock-disabled
+            var observer = new MutationObserver(function() {
+                var popovers = parentDoc.querySelectorAll('div[data-baseweb="popover"]');
+                popovers.forEach(function(pop) {
+                    if (!pop.hasAttribute('data-focus-lock-disabled')) {
+                        pop.setAttribute('data-focus-lock-disabled', 'true');
+                        pop.setAttribute('data-no-focus-lock', 'true');
+                    }
+                });
+            });
+            observer.observe(parentDoc.body, { childList: true, subtree: true });
+        }
     })();
     </script>
     """, height=0, width=0)
