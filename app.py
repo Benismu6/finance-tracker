@@ -643,7 +643,7 @@ def render_account_card(title, subtitle, right_val, right_sub, extra_left="", ex
     st.markdown(card_html, unsafe_allow_html=True)
 
 # ==========================================
-# 5. DYNAMIC TRANSACTION MODALS
+# 5. DYNAMIC TRANSACTION MODALS (TOUCH-SAFE)
 # ==========================================
 all_account_names = list(df_registry["Account_Name"])
 deposit_accounts = list(df_registry[df_registry["Account_Type"] == "Cash / Bank"]["Account_Name"])
@@ -653,7 +653,7 @@ def modal_bank_income(acc_name):
     st.markdown(f"**Target Account:** `{acc_name}`")
     with st.form(f"form_m_inc_{acc_name}", clear_on_submit=True):
         inc_amt = st.number_input("Amount ($)", value=None, min_value=0.01, step=1.00, format="%.2f", placeholder="0.00")
-        inc_cat = st.selectbox("Source", ["W2 Salary", "Uber Income", "Other Income"], key=f"dlg_inc_cat_{acc_name}")
+        inc_cat = st.radio("Source", ["W2 Salary", "Uber Income", "Other Income"], horizontal=True, key=f"dlg_inc_cat_{acc_name}")
         payer = st.text_input("Payer / Store", placeholder="e.g. Employer Payroll, Uber Payout, Client")
         memo = st.text_input("Memo (Optional)", placeholder="e.g. Paycheck deposit")
         tx_date = st.date_input("Date", value=datetime.today())
@@ -686,9 +686,10 @@ def modal_bank_income(acc_name):
 def modal_bank_transfer(from_acc):
     st.markdown(f"**From Account:** `{from_acc}`")
     other_accounts = [a for a in deposit_accounts if a != from_acc]
+    target_options = other_accounts if other_accounts else deposit_accounts
     with st.form(f"form_m_trans_{from_acc}", clear_on_submit=True):
         trans_amt = st.number_input("Transfer Amount ($)", value=None, min_value=0.01, step=10.00, format="%.2f", placeholder="0.00")
-        to_acc = st.selectbox("Transfer Into", other_accounts if other_accounts else deposit_accounts, key=f"dlg_trans_to_{from_acc}")
+        to_acc = st.radio("Transfer Into", target_options, key=f"dlg_trans_to_{from_acc}")
         memo = st.text_input("Memo (Optional)", placeholder="e.g. Weekly savings sweep")
         tx_date = st.date_input("Date", value=datetime.today())
         
@@ -723,11 +724,11 @@ def modal_bank_expense(acc_name):
     st.markdown(f"**Account:** `{acc_name}`")
     with st.form(f"form_m_b_exp_{acc_name}", clear_on_submit=True):
         amt = st.number_input("Amount ($)", value=None, min_value=0.01, step=1.00, format="%.2f", placeholder="0.00")
-        cat = st.selectbox("Category", categories_list, key=f"dlg_bexp_cat_{acc_name}")
         vendor = st.text_input("Merchant / Store", placeholder="e.g. Landlord, Shell, Trader Joe's")
+        cat = st.radio("Category", categories_list, key=f"dlg_bexp_cat_{acc_name}")
+        gt = st.radio("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"], horizontal=True, key=f"dlg_bexp_gt_{acc_name}")
         desc = st.text_input("Memo (Optional)", placeholder="e.g. Direct withdrawal")
         tx_date = st.date_input("Date", value=datetime.today())
-        gt = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"], key=f"dlg_bexp_gt_{acc_name}")
         
         if st.form_submit_button("Save Expense"):
             if amt is None or amt <= 0:
@@ -757,11 +758,11 @@ def modal_card_expense(card_name):
     st.markdown(f"**Card:** `{card_name}`")
     with st.form(f"form_m_c_exp_{card_name}", clear_on_submit=True):
         amt = st.number_input("Amount ($)", value=None, min_value=0.01, step=1.00, format="%.2f", placeholder="0.00")
-        cat = st.selectbox("Category", categories_list, key=f"dlg_cexp_cat_{card_name}")
         vendor = st.text_input("Merchant / Store", placeholder="e.g. Amazon, Shell, Quick Mart")
+        cat = st.radio("Category", categories_list, key=f"dlg_cexp_cat_{card_name}")
+        gt = st.radio("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"], horizontal=True, key=f"dlg_cexp_gt_{card_name}")
         desc = st.text_input("Memo (Optional)", placeholder="e.g. Gas, Work lunch")
         tx_date = st.date_input("Date", value=datetime.today())
-        gt = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"], key=f"dlg_cexp_gt_{card_name}")
         
         if st.form_submit_button("Record Charge"):
             if amt is None or amt <= 0:
@@ -791,7 +792,7 @@ def modal_card_payment(card_name, current_balance):
     st.markdown(f"**Card:** `{card_name}` | **Balance:** `${current_balance:,.2f}`")
     with st.form(f"form_m_c_pay_{card_name}", clear_on_submit=True):
         pay_amt = st.number_input("Payment Amount ($)", value=None, min_value=0.01, step=1.00, format="%.2f", placeholder=f"{current_balance:.2f}" if current_balance > 0 else "0.00")
-        from_acc = st.selectbox("Paid From", deposit_accounts, key=f"dlg_cpay_from_{card_name}")
+        from_acc = st.radio("Paid From", deposit_accounts, horizontal=True, key=f"dlg_cpay_from_{card_name}")
         memo = st.text_input("Memo (Optional)", placeholder="e.g. Statement payoff, AZEO adjustment")
         tx_date = st.date_input("Date", value=datetime.today())
         
@@ -823,7 +824,7 @@ def open_new_account_dialog():
     st.caption("Register a new account or credit card. It will automatically update in Google Sheets and sync into your app.")
     with st.form("new_account_form", clear_on_submit=True):
         new_acc_name = st.text_input("Account Identifier (e.g. Capital One 1122)", placeholder="Card or Bank Name")
-        new_acc_type = st.selectbox("Account Type", ["Cash / Bank", "Personal CC", "Business CC"], key="dlg_new_acc_type")
+        new_acc_type = st.radio("Account Type", ["Cash / Bank", "Personal CC", "Business CC"], horizontal=True, key="dlg_new_acc_type")
         new_acc_role = st.text_input("Role / Memo (e.g. Dining Card, HYSA)", placeholder="Brief description")
         new_acc_base = st.number_input("Starting Base Balance ($)", value=0.00, min_value=0.00, step=10.00, format="%.2f")
         
@@ -1025,7 +1026,7 @@ with tabs[0]:
             if st.button(f"btn_bcpay_{san_name}", key=f"trig_bcpay_{san_name}"):
                 modal_card_payment(c['name'], c['current_balance'])
 
-   # 5. DELEGATED EVENT LISTENER & RELIABLE DROPDOWN FIX
+    # 5. DELEGATED EVENT LISTENER (DRAWER BUTTONS ONLY)
     components.html("""
     <script>
     (function() {
@@ -1036,14 +1037,12 @@ with tabs[0]:
             return;
         }
         if (!parentDoc) return;
-
-        // Clean up any previously attached listeners on window.parent
-        if (window.parent._hubListenersCleanup) {
-            try { window.parent._hubListenersCleanup(); } catch(err) {}
-        }
-
-        // --- 1. CARD DRAWER QUICK-ACTION BUTTONS ---
-        function onDrawerClick(e) {
+        
+        if (window.parent._hubDrawerListenerAttached) return;
+        window.parent._hubDrawerListenerAttached = true;
+        
+        // Handle card drawer quick-action buttons
+        parentDoc.addEventListener('click', function(e) {
             var btn = e.target.closest('[data-trigger]');
             if (!btn) return;
             e.preventDefault();
@@ -1056,44 +1055,7 @@ with tabs[0]:
             if (targetBtn) {
                 targetBtn.click();
             }
-        }
-        parentDoc.addEventListener('click', onDrawerClick, true);
-
-        // --- 2. PREVENT MODAL FOCUS-LOCK FROM STEALING DROPDOWN FOCUS ---
-        function onFocusIn(e) {
-            if (e.target && e.target.closest && e.target.closest('[data-baseweb="popover"]')) {
-                e.stopImmediatePropagation();
-            }
-        }
-        parentDoc.addEventListener('focusin', onFocusIn, true);
-
-        // --- 3. FIRST-TAP / FIRST-CLICK OPTION SELECTION ---
-        function onOptionPointerDown(e) {
-            var opt = e.target.closest('[role="option"]');
-            if (!opt) return;
-            // Prevents the select input from blurring before click completes
-            e.preventDefault();
-        }
-
-        function onOptionPointerUp(e) {
-            var opt = e.target.closest('[role="option"]');
-            if (!opt) return;
-            // Dispatches the clean selection click in the next micro-tick
-            setTimeout(function() {
-                opt.click();
-            }, 0);
-        }
-
-        parentDoc.addEventListener('pointerdown', onOptionPointerDown, true);
-        parentDoc.addEventListener('pointerup', onOptionPointerUp, true);
-
-        // Save cleanup reference for future re-runs
-        window.parent._hubListenersCleanup = function() {
-            parentDoc.removeEventListener('click', onDrawerClick, true);
-            parentDoc.removeEventListener('focusin', onFocusIn, true);
-            parentDoc.removeEventListener('pointerdown', onOptionPointerDown, true);
-            parentDoc.removeEventListener('pointerup', onOptionPointerUp, true);
-        };
+        }, true);
     })();
     </script>
     """, height=0, width=0)
