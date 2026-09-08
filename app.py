@@ -1023,72 +1023,39 @@ with tabs[0]:
             if st.button(f"btn_bcpay_{san_name}", key=f"trig_bcpay_{san_name}"):
                 modal_card_payment(c['name'], c['current_balance'])
 
-    # 5. DELEGATED EVENT LISTENER & MOBILE DROPDOWN INTERCEPTION
-    components.html("""
-    <script>
-    (function() {
-        var parentDoc;
-        try {
-            parentDoc = window.parent.document;
-        } catch(e) {
-            return;
-        }
-        if (!parentDoc) return;
-        
-        if (window.parent._hubListenersV4Attached) return;
-        window.parent._hubListenersV4Attached = true;
-        
-        // --- 1. CARD DRAWER QUICK-ACTION BUTTONS ---
-        parentDoc.addEventListener('click', function(e) {
-            var btn = e.target.closest('[data-trigger]');
-            if (!btn) return;
-            e.preventDefault();
-            e.stopPropagation();
+        # 5. DELEGATED EVENT LISTENER FOR CARD DRAWER BUTTONS ONLY
+        components.html("""
+        <script>
+        (function() {
+            var parentDoc;
+            try {
+                parentDoc = window.parent.document;
+            } catch(e) {
+                return;
+            }
+            if (!parentDoc) return;
             
-            var triggerKey = btn.getAttribute('data-trigger');
-            if (!triggerKey) return;
+            if (window.parent._hubListenersV4Attached) return;
+            window.parent._hubListenersV4Attached = true;
             
-            var targetBtn = parentDoc.querySelector('.st-key-' + triggerKey + ' button');
-            if (targetBtn) {
-                targetBtn.click();
-            }
-        }, true);
-
-        // --- 2. DESKTOP DROPDOWN FIX (PREVENTS FOCUS TRAP DOUBLE-CLICK) ---
-        parentDoc.addEventListener('mousedown', function(e) {
-            var popover = e.target.closest('[data-baseweb="popover"]');
-            if (popover) {
-                var opt = e.target.closest('[role="option"]');
-                if (opt) {
-                    e.preventDefault();
-                    opt.click();
+            // CARD DRAWER QUICK-ACTION BUTTONS ONLY (leave native dropdowns alone)
+            parentDoc.addEventListener('click', function(e) {
+                var btn = e.target.closest('[data-trigger]');
+                if (!btn) return;
+                e.preventDefault();
+                e.stopPropagation();
+                
+                var triggerKey = btn.getAttribute('data-trigger');
+                if (!triggerKey) return;
+                
+                var targetBtn = parentDoc.querySelector('.st-key-' + triggerKey + ' button');
+                if (targetBtn) {
+                    targetBtn.click();
                 }
-            }
-        }, true);
-
-        // --- 3. MOBILE TOUCH FIX (HANDLES FIRST-TAP OPTION SELECTION) ---
-        var touchStartY = 0;
-        parentDoc.addEventListener('touchstart', function(e) {
-            var popover = e.target.closest('[data-baseweb="popover"]');
-            if (popover && e.touches && e.touches.length > 0) {
-                touchStartY = e.touches[0].clientY;
-            }
-        }, { capture: true, passive: true });
-
-        parentDoc.addEventListener('touchend', function(e) {
-            var opt = e.target.closest('[data-baseweb="popover"] [role="option"]');
-            if (opt && e.changedTouches && e.changedTouches.length > 0) {
-                var deltaY = Math.abs(e.changedTouches[0].clientY - touchStartY);
-                if (deltaY < 12) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    opt.click();
-                }
-            }
-        }, { capture: true, passive: false });
-    })();
-    </script>
-    """, height=0, width=0)
+            }, true);
+        })();
+        </script>
+        """, height=0, width=0)
 
 # ------------------------------------------
 # TAB 2: COMMAND CENTER
