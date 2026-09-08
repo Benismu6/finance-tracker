@@ -241,9 +241,35 @@ st.markdown("""
         pointer-events: auto !important;
     }
 
-    @keyframes slideDownFade {
-        0% { opacity: 0; transform: translate(-50%, -25px); }
-        100% { opacity: 1; transform: translate(-50%, 0); }
+    /* PURE CSS AUTO-DISMISS FLOATING BANNER */
+    @keyframes slideDownFadeOut {
+        0% { opacity: 0; transform: translate(-50%, -25px); visibility: visible; }
+        8% { opacity: 1; transform: translate(-50%, 0); }
+        82% { opacity: 1; transform: translate(-50%, 0); }
+        100% { opacity: 0; transform: translate(-50%, -20px); visibility: hidden; pointer-events: none; }
+    }
+
+    .top-success-popup {
+        position: fixed !important;
+        top: 22px !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        z-index: 99999999 !important;
+        background: linear-gradient(135deg, #065F46 0%, #047857 100%) !important;
+        border: 2px solid #34D399 !important;
+        color: #FFFFFF !important;
+        padding: 13px 26px !important;
+        border-radius: 12px !important;
+        font-weight: 800 !important;
+        font-size: 14px !important;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.65), 0 0 16px rgba(52, 211, 153, 0.45) !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 10px !important;
+        animation: slideDownFadeOut 4.2s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+        text-align: center !important;
+        max-width: 90% !important;
+        pointer-events: auto;
     }
 
     .badge-opt { background-color: #065F46; color: #6EE7B7; padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
@@ -253,49 +279,15 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# FLOATING TOP SUCCESS NOTIFICATION SYSTEM
+# FLOATING TOP SUCCESS NOTIFICATION
 # ==========================================
 if "success_notification" in st.session_state and st.session_state["success_notification"]:
     s_msg = st.session_state["success_notification"]
     del st.session_state["success_notification"]
-    st.markdown(f"""
-    <div id="top-success-popup" style="
-        position: fixed;
-        top: 22px;
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 99999999;
-        background: linear-gradient(135deg, #065F46 0%, #047857 100%);
-        border: 2px solid #34D399;
-        color: #FFFFFF;
-        padding: 13px 26px;
-        border-radius: 12px;
-        font-weight: 800;
-        font-size: 14px;
-        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.65), 0 0 16px rgba(52, 211, 153, 0.45);
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        animation: slideDownFade 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        text-align: center;
-        max-width: 90%;
-        pointer-events: auto;
-    ">
-        <span style="font-size: 18px;">✅</span>
-        <span>{s_msg}</span>
-    </div>
-    <script>
-        setTimeout(function() {
-            var el = window.parent.document.getElementById('top-success-popup') || document.getElementById('top-success-popup');
-            if (el) {
-                el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
-                el.style.opacity = '0';
-                el.style.transform = 'translateX(-50%) translateY(-20px)';
-                setTimeout(function() { el.remove(); }, 500);
-            }
-        }, 4000);
-    </script>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="top-success-popup"><span style="font-size:18px;">✅</span><span>{s_msg}</span></div>',
+        unsafe_allow_html=True
+    )
 
 # ==========================================
 # 2. DATE & CYCLE CALCULATION ENGINE
@@ -433,7 +425,7 @@ def get_accounts_registry():
 df_tx = get_ledger_data()
 df_registry = get_accounts_registry()
 
-# 1. DYNAMIC CASH BALANCES (WITH TRANSFERS INCLUDED)
+# 1. DYNAMIC CASH BALANCES
 live_cash_registry = []
 cash_df = df_registry[df_registry["Account_Type"] == "Cash / Bank"]
 
@@ -642,7 +634,7 @@ def render_account_card(title, subtitle, right_val, right_sub, extra_left="", ex
     st.markdown(card_html, unsafe_allow_html=True)
 
 # ==========================================
-# 5. DYNAMIC TRANSACTION MODALS (WITH CLEAN PLACEHOLDER)
+# 5. DYNAMIC TRANSACTION MODALS
 # ==========================================
 all_account_names = list(df_registry["Account_Name"])
 deposit_accounts = list(df_registry[df_registry["Account_Type"] == "Cash / Bank"]["Account_Name"])
@@ -1508,7 +1500,7 @@ with tabs[2]:
 with tabs[3]:
     st.subheader("🏠 Baltimore Home Purchase Target")
     st.progress(goal_progress)
-    st.caption(f"**${total_cash:,.2f}** saved of **${HOME_GOAL:,.2f}** goal ({(goal_progress*100):.1f}%)")[cite: 1]
+    st.caption(f"**${total_cash:,.2f}** saved of **${HOME_GOAL:,.2f}** goal ({(goal_progress*100):.1f}%)")
     
     col_a, col_b = st.columns(2)
     with col_a:
@@ -1528,16 +1520,16 @@ with tabs[3]:
         
     st.markdown("""
     ---
-    **10% Down Acquisition Strategy Summary:**[cite: 1]
-    * **Target Price:** $300,000 | **Down Payment (10%):** $30,000[cite: 1]
-    * **Estimated Closing & Prepaids:** $11,000[cite: 1]
-    * **Credits & Assistance Applied:** -$21,000[cite: 1]
-      * *2.5% Buyer Agent Commission Credit:* -$7,500[cite: 1]
-      * *Maryland Mortgage Program (MMP) DPA:* -$9,000[cite: 1]
-      * *Seller Concessions (1.5%):* -$4,500[cite: 1]
-    * **Net Cash at Settlement:** $20,000[cite: 1]
-    * **Post-Closing 3-Mo Reserves:** $6,500[cite: 1]
-    * **Total Liquid Target:** **$26,500**[cite: 1]
+    **10% Down Acquisition Strategy Summary:**
+    * **Target Price:** $300,000 | **Down Payment (10%):** $30,000
+    * **Estimated Closing & Prepaids:** $11,000
+    * **Credits & Assistance Applied:** -$21,000
+      * *2.5% Buyer Agent Commission Credit:* -$7,500
+      * *Maryland Mortgage Program (MMP) DPA:* -$9,000
+      * *Seller Concessions (1.5%):* -$4,500
+    * **Net Cash at Settlement:** $20,000
+    * **Post-Closing 3-Mo Reserves:** $6,500
+    * **Total Liquid Target:** **$26,500**
     """)
 
 # ------------------------------------------
