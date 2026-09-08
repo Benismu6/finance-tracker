@@ -277,11 +277,13 @@ st.markdown("""
     .badge-biz { background-color: #312E81; color: #C7D2FE; padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
 
     /* FORCE DROPDOWN POPOVER & MENU ABOVE STREAMLIT DIALOG BACKDROP */
-    div[data-baseweb="popover"], 
-    div[data-baseweb="menu"], 
-    ul[role="listbox"] {
-        z-index: 9999999999 !important;
-    }
+        div[data-baseweb="popover"], 
+        div[data-baseweb="menu"], 
+        ul[role="listbox"],
+        li[role="option"] {
+            z-index: 9999999999 !important;
+            pointer-events: auto !important;
+        }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1023,7 +1025,7 @@ with tabs[0]:
             if st.button(f"btn_bcpay_{san_name}", key=f"trig_bcpay_{san_name}"):
                 modal_card_payment(c['name'], c['current_balance'])
 
-    # 5. DELEGATED EVENT LISTENER
+   # 5. DELEGATED EVENT LISTENER & RELIABLE DROPDOWN FIX
     components.html("""
     <script>
     (function() {
@@ -1034,12 +1036,14 @@ with tabs[0]:
             return;
         }
         if (!parentDoc) return;
-        
-        if (window.parent._hubListenersV4Attached) return;
-        window.parent._hubListenersV4Attached = true;
-        
+
+        // Clean up any previously attached listeners on window.parent
+        if (window.parent._hubListenersCleanup) {
+            try { window.parent._hubListenersCleanup(); } catch(err) {}
+        }
+
         // --- 1. CARD DRAWER QUICK-ACTION BUTTONS ---
-        parentDoc.addEventListener('click', function(e) {
+        function onDrawerClick(e) {
             var btn = e.target.closest('[data-trigger]');
             if (!btn) return;
             e.preventDefault();
@@ -1052,10 +1056,44 @@ with tabs[0]:
             if (targetBtn) {
                 targetBtn.click();
             }
-        }, true);
-        
-        // Parts 2 & 3 (Desktop Dropdown Fix & Mobile Touch Fix) have been removed. 
-        // Streamlit natively handles these dropdowns without needing manual click forcing.
+        }
+        parentDoc.addEventListener('click', onDrawerClick, true);
+
+        // --- 2. PREVENT MODAL FOCUS-LOCK FROM STEALING DROPDOWN FOCUS ---
+        function onFocusIn(e) {
+            if (e.target && e.target.closest && e.target.closest('[data-baseweb="popover"]')) {
+                e.stopImmediatePropagation();
+            }
+        }
+        parentDoc.addEventListener('focusin', onFocusIn, true);
+
+        // --- 3. FIRST-TAP / FIRST-CLICK OPTION SELECTION ---
+        function onOptionPointerDown(e) {
+            var opt = e.target.closest('[role="option"]');
+            if (!opt) return;
+            // Prevents the select input from blurring before click completes
+            e.preventDefault();
+        }
+
+        function onOptionPointerUp(e) {
+            var opt = e.target.closest('[role="option"]');
+            if (!opt) return;
+            // Dispatches the clean selection click in the next micro-tick
+            setTimeout(function() {
+                opt.click();
+            }, 0);
+        }
+
+        parentDoc.addEventListener('pointerdown', onOptionPointerDown, true);
+        parentDoc.addEventListener('pointerup', onOptionPointerUp, true);
+
+        // Save cleanup reference for future re-runs
+        window.parent._hubListenersCleanup = function() {
+            parentDoc.removeEventListener('click', onDrawerClick, true);
+            parentDoc.removeEventListener('focusin', onFocusIn, true);
+            parentDoc.removeEventListener('pointerdown', onOptionPointerDown, true);
+            parentDoc.removeEventListener('pointerup', onOptionPointerUp, true);
+        };
     })();
     </script>
     """, height=0, width=0)
