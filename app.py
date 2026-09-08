@@ -241,7 +241,7 @@ st.markdown("""
         pointer-events: auto !important;
     }
 
-    /* PURE CSS AUTO-DISMISS FLOATING BANNER */
+    /* AUTO-DISMISS FLOATING BANNER */
     @keyframes slideDownFadeOut {
         0% { opacity: 0; transform: translate(-50%, -25px); visibility: visible; }
         8% { opacity: 1; transform: translate(-50%, 0); }
@@ -254,7 +254,7 @@ st.markdown("""
         top: 22px !important;
         left: 50% !important;
         transform: translateX(-50%) !important;
-        z-index: 99999999 !important;
+        z-index: 100000002 !important;
         background: linear-gradient(135deg, #065F46 0%, #047857 100%) !important;
         border: 2px solid #34D399 !important;
         color: #FFFFFF !important;
@@ -272,16 +272,15 @@ st.markdown("""
         pointer-events: auto;
     }
 
-    /* BASEWEB DROPDOWN / POPOVER MOBILE & DESKTOP ENHANCEMENTS */
-    div[data-baseweb="popover"] {
-        z-index: 99999999 !important;
+    /* ELEVATE BASEWEB DROPDOWN LAYER ABOVE DIALOG MODAL */
+    div[data-baseweb="layer"] {
+        z-index: 100000000 !important;
     }
-    div[data-baseweb="popover"] ul {
-        -webkit-overflow-scrolling: touch !important;
+    div[data-baseweb="popover"] {
+        z-index: 100000001 !important;
     }
     div[data-baseweb="popover"] li[role="option"] {
         cursor: pointer !important;
-        -webkit-tap-highlight-color: rgba(59, 130, 246, 0.3) !important;
         touch-action: manipulation !important;
         user-select: none !important;
     }
@@ -291,17 +290,6 @@ st.markdown("""
     .badge-biz { background-color: #312E81; color: #C7D2FE; padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
 </style>
 """, unsafe_allow_html=True)
-
-# ==========================================
-# FLOATING TOP SUCCESS NOTIFICATION
-# ==========================================
-if "success_notification" in st.session_state and st.session_state["success_notification"]:
-    s_msg = st.session_state["success_notification"]
-    del st.session_state["success_notification"]
-    st.markdown(
-        f'<div class="top-success-popup"><span style="font-size:18px;">✅</span><span>{s_msg}</span></div>',
-        unsafe_allow_html=True
-    )
 
 # ==========================================
 # 2. DATE & CYCLE CALCULATION ENGINE
@@ -346,7 +334,7 @@ def get_prev_recurring_date(target_day: int, ref_date: date) -> date:
         return date(prev_y, prev_m, min(target_day, max_d_prev))
 
 # ==========================================
-# 3. GSHEETS BACKEND (LEDGER & ACCOUNTS REGISTRY)
+# 3. GSHEETS BACKEND & IN-MEMORY CACHE
 # ==========================================
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -388,9 +376,9 @@ def append_account_to_sheet(row_values):
         worksheet.append_row(["Account_Name", "Account_Type", "Role_Or_Memo", "Base_Balance", "Credit_Limit", "Due_Day", "Close_Day"])
     worksheet.append_row(row_values, value_input_option="USER_ENTERED")
 
-def get_ledger_data():
+def fetch_ledger_data():
     try:
-        df = conn.read(worksheet="Master_Transactions", ttl="0")
+        df = conn.read(worksheet="Master_Transactions", ttl="10m")
         if df is not None and not df.empty:
             df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce").fillna(0.0)
             df["Date_DT"] = pd.to_datetime(df["Date"], errors="coerce").dt.date
@@ -406,9 +394,9 @@ def get_ledger_data():
         "Merchant", "Amount", "Goal_Tag", "Item_Description", "Notes"
     ])
 
-def get_accounts_registry():
+def fetch_accounts_registry():
     try:
-        df_acc = conn.read(worksheet="Accounts_Master", ttl="0")
+        df_acc = conn.read(worksheet="Accounts_Master", ttl="10m")
         if df_acc is not None and not df_acc.empty:
             if "Account_Name" in df_acc.columns:
                 df_acc["Account_Name"] = df_acc["Account_Name"].astype(str).str.strip().str.replace(" C ", " ").str.replace(" S ", " ")
@@ -436,10 +424,15 @@ def get_accounts_registry():
         {"Account_Name": "Chase 0431", "Account_Type": "Business CC", "Role_Or_Memo": "Business CC", "Base_Balance": 505.07, "Credit_Limit": 0.00, "Due_Day": 1, "Close_Day": 7}
     ])
 
-df_tx = get_ledger_data()
-df_registry = get_accounts_registry()
+if "df_tx" not in st.session_state or st.session_state.df_tx is None:
+    st.session_state.df_tx = fetch_ledger_data()
+if "df_registry" not in st.session_state or st.session_state.df_registry is None:
+    st.session_state.df_registry = fetch_accounts_registry()
 
-# 1. DYNAMIC CASH BALANCES (WITH TRANSFERS INCLUDED)
+df_tx = st.session_state.df_tx
+df_registry = st.session_state.df_registry
+
+# 1. DYNAMIC CASH BALANCES
 live_cash_registry = []
 cash_df = df_registry[df_registry["Account_Type"] == "Cash / Bank"]
 
@@ -572,7 +565,6 @@ HOME_GOAL = 26500.00
 goal_progress = min(total_cash / HOME_GOAL, 1.0)
 remaining_goal = max(HOME_GOAL - total_cash, 0.0)
 
-# Categories Master List & Lean $300/wk Targets
 categories_list = [
     "Vehicle & Gas", "Housing & Rent", "Groceries & Food", 
     "Personal & Entertainment", "Dining Out & Coffee", 
@@ -602,8 +594,55 @@ CATEGORY_COLORS = {
 }
 
 # ==========================================
-# 4. CARD HTML RENDERING HELPERS
+# 4. CARD HTML & INSTANT POPUP DISMISSAL
 # ==========================================
+def close_dialog_and_notify(message, target_acc_id=None, new_bal_str=None):
+    safe_msg = message.replace("'", "\\'").replace('"', '\\"')
+    acc_js = f"var bEl=parentDoc.getElementById('card-bal-{target_acc_id}');if(bEl)bEl.textContent='{new_bal_str}';" if target_acc_id and new_bal_str else ""
+
+    components.html(f"""
+    <script>
+    (function() {{
+        var parentDoc;
+        try {{
+            parentDoc = window.parent.document;
+        }} catch(e) {{
+            parentDoc = document;
+        }}
+        if (!parentDoc) return;
+        
+        {acc_js}
+        
+        var existing = parentDoc.getElementById('top-floating-banner');
+        if (existing) existing.remove();
+        
+        var banner = parentDoc.createElement('div');
+        banner.id = 'top-floating-banner';
+        banner.className = 'top-success-popup';
+        banner.innerHTML = '<span style="font-size:18px;">✅</span><span>{safe_msg}</span>';
+        parentDoc.body.appendChild(banner);
+        
+        setTimeout(function() {{
+            if (banner && banner.parentNode) {{
+                banner.remove();
+            }}
+        }}, 4200);
+        
+        setTimeout(function() {{
+            var closeBtn = parentDoc.querySelector('button[aria-label="Close"]') || 
+                           parentDoc.querySelector('button[aria-label="Close dialog"]') ||
+                           parentDoc.querySelector('button[data-testid="stDialogCloseButton"]') ||
+                           parentDoc.querySelector('div[role="dialog"] button');
+            if (closeBtn) {{
+                closeBtn.click();
+            }} else {{
+                parentDoc.dispatchEvent(new KeyboardEvent('keydown', {{ key: 'Escape', keyCode: 27, bubbles: true }}));
+            }}
+        }}, 80);
+    }})();
+    </script>
+    """, height=0, width=0)
+
 def get_tx_rows_html(acc_name):
     if not df_tx.empty and "Account" in df_tx.columns:
         sub_tx = df_tx[
@@ -643,222 +682,267 @@ def get_tx_rows_html(acc_name):
 def render_account_card(title, subtitle, right_val, right_sub, extra_left="", extra_right="", tx_html="", action_buttons_html=""):
     bottom_bar = f"""<div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;"><span style="font-size:12px; color:#CBD5E1;">{extra_left}</span><div>{extra_right}</div></div>""" if (extra_left or extra_right) else ""
     val_color = '#38BDF8' if '$' in right_val and '.' in right_val else '#F8FAFC'
+    san_name = re.sub(r'[^a-zA-Z0-9_]', '_', title)
     
-    card_html = f"""<details class="card-container"><summary><div style="display:flex; justify-content:space-between; align-items:center;"><div><span style="font-weight:700; font-size:15px; color:#F8FAFC;">{title}</span><div style="font-size:12px; color:#94A3B8;">{subtitle}</div></div><div style="text-align:right;"><span style="font-weight:800; font-size:18px; color:{val_color};">{right_val}</span><div style="font-size:11px; color:#64748B;">{right_sub}</div></div></div>{bottom_bar}</summary><div class="card-drawer">{action_buttons_html}{tx_html}</div></details>"""
+    card_html = f"""<details class="card-container"><summary><div style="display:flex; justify-content:space-between; align-items:center;"><div><span style="font-weight:700; font-size:15px; color:#F8FAFC;">{title}</span><div style="font-size:12px; color:#94A3B8;">{subtitle}</div></div><div style="text-align:right;"><span id="card-bal-{san_name}" style="font-weight:800; font-size:18px; color:{val_color};">{right_val}</span><div style="font-size:11px; color:#64748B;">{right_sub}</div></div></div>{bottom_bar}</summary><div class="card-drawer">{action_buttons_html}{tx_html}</div></details>"""
     st.markdown(card_html, unsafe_allow_html=True)
 
 # ==========================================
-# 5. DYNAMIC TRANSACTION MODALS
+# 5. DYNAMIC TRANSACTION MODALS (DIRECT WIDGETS)
 # ==========================================
 all_account_names = list(df_registry["Account_Name"])
 deposit_accounts = list(df_registry[df_registry["Account_Type"] == "Cash / Bank"]["Account_Name"])
 
 @st.dialog("Record Income / Deposit")
 def modal_bank_income(acc_name):
+    san = re.sub(r'[^a-zA-Z0-9_]', '_', acc_name)
     st.markdown(f"**Target Account:** `{acc_name}`")
-    with st.form(f"form_m_inc_{acc_name}", clear_on_submit=True):
-        inc_amt = st.number_input("Amount ($)", value=None, min_value=0.01, step=1.00, format="%.2f", placeholder="0.00")
-        inc_cat = st.selectbox("Source", ["W2 Salary", "Uber Income", "Other Income"])
-        payer = st.text_input("Payer / Store", placeholder="e.g. Employer Payroll, Uber Payout, Client")
-        memo = st.text_input("Memo (Optional)", placeholder="e.g. Paycheck deposit")
-        tx_date = st.date_input("Date", value=datetime.today())
-        gt = "Baltimore 1st Home" if ("4979" in acc_name or "SECU" in acc_name) else "General Living"
-        
-        if st.form_submit_button("Record Deposit"):
-            if inc_amt is None or inc_amt <= 0:
-                st.error("Please enter a valid amount.")
-            else:
-                row = [
-                    f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-                    tx_date.strftime("%Y-%m-%d"),
-                    acc_name,
-                    "Income",
-                    inc_cat,
-                    payer,
-                    float(inc_amt),
-                    gt,
-                    memo,
-                    "Card Quick Entry"
-                ]
-                try:
-                    append_tx_to_sheet(row)
-                    st.session_state["success_notification"] = f"Deposited ${inc_amt:,.2f} into {acc_name}!"
-                    st.rerun()
-                except Exception as err:
-                    st.error(f"Error: {err}")
+    
+    inc_amt = st.number_input("Amount ($)", value=None, min_value=0.01, step=1.00, format="%.2f", placeholder="0.00", key=f"m_inc_amt_{san}")
+    inc_cat = st.selectbox("Source", ["W2 Salary", "Uber Income", "Other Income"], key=f"m_inc_cat_{san}")
+    payer = st.text_input("Payer / Store", placeholder="e.g. Employer Payroll, Uber Payout, Client", key=f"m_inc_pay_{san}")
+    memo = st.text_input("Memo (Optional)", placeholder="e.g. Paycheck deposit", key=f"m_inc_memo_{san}")
+    tx_date = st.date_input("Date", value=datetime.today(), key=f"m_inc_date_{san}")
+    gt = "Baltimore 1st Home" if ("4979" in acc_name or "SECU" in acc_name) else "General Living"
+    
+    if st.button("Record Deposit", type="primary", key=f"m_inc_btn_{san}"):
+        if inc_amt is None or inc_amt <= 0:
+            st.error("Please enter a valid amount.")
+        else:
+            row = [
+                f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                tx_date.strftime("%Y-%m-%d"),
+                acc_name,
+                "Income",
+                inc_cat,
+                payer,
+                float(inc_amt),
+                gt,
+                memo,
+                "Card Quick Entry"
+            ]
+            try:
+                append_tx_to_sheet(row)
+                new_row_df = pd.DataFrame([{
+                    "Transaction_ID": row[0], "Date": row[1], "Account": row[2], "Type": row[3],
+                    "Category": row[4], "Merchant": row[5], "Amount": row[6], "Goal_Tag": row[7],
+                    "Item_Description": row[8], "Notes": row[9], "Date_DT": tx_date
+                }])
+                st.session_state.df_tx = pd.concat([st.session_state.df_tx, new_row_df], ignore_index=True)
+                
+                curr_b = next((c["current_balance"] for c in live_cash_registry if c["name"] == acc_name), 0.0)
+                new_bal_str = f"${(curr_b + float(inc_amt)):,.2f}"
+                close_dialog_and_notify(f"Deposited ${inc_amt:,.2f} into {acc_name}!", san, new_bal_str)
+            except Exception as err:
+                st.error(f"Error: {err}")
 
 @st.dialog("Execute Account Transfer")
 def modal_bank_transfer(from_acc):
+    san = re.sub(r'[^a-zA-Z0-9_]', '_', from_acc)
     st.markdown(f"**From Account:** `{from_acc}`")
     other_accounts = [a for a in deposit_accounts if a != from_acc]
-    with st.form(f"form_m_trans_{from_acc}", clear_on_submit=True):
-        trans_amt = st.number_input("Transfer Amount ($)", value=None, min_value=0.01, step=10.00, format="%.2f", placeholder="0.00")
-        to_acc = st.selectbox("Transfer Into", other_accounts if other_accounts else deposit_accounts)
-        memo = st.text_input("Memo (Optional)", placeholder="e.g. Weekly savings sweep")
-        tx_date = st.date_input("Date", value=datetime.today())
-        
-        if st.form_submit_button("Confirm Transfer"):
-            if trans_amt is None or trans_amt <= 0:
-                st.error("Please enter a valid transfer amount.")
-            elif from_acc == to_acc:
-                st.error("Source and destination must be different.")
-            else:
-                now_str = datetime.now().strftime('%Y%m%d%H%M%S')
-                d_str = tx_date.strftime("%Y-%m-%d")
-                memo_str = f" — {memo.strip()}" if memo.strip() else ""
-                gt = "Baltimore 1st Home" if ("4979" in to_acc or "SECU" in to_acc) else "General Living"
+    
+    trans_amt = st.number_input("Transfer Amount ($)", value=None, min_value=0.01, step=10.00, format="%.2f", placeholder="0.00", key=f"m_tra_amt_{san}")
+    to_acc = st.selectbox("Transfer Into", other_accounts if other_accounts else deposit_accounts, key=f"m_tra_to_{san}")
+    memo = st.text_input("Memo (Optional)", placeholder="e.g. Weekly savings sweep", key=f"m_tra_memo_{san}")
+    tx_date = st.date_input("Date", value=datetime.today(), key=f"m_tra_date_{san}")
+    
+    if st.button("Confirm Transfer", type="primary", key=f"m_tra_btn_{san}"):
+        if trans_amt is None or trans_amt <= 0:
+            st.error("Please enter a valid transfer amount.")
+        elif from_acc == to_acc:
+            st.error("Source and destination must be different.")
+        else:
+            now_str = datetime.now().strftime('%Y%m%d%H%M%S')
+            d_str = tx_date.strftime("%Y-%m-%d")
+            memo_str = f" — {memo.strip()}" if memo.strip() else ""
+            gt = "Baltimore 1st Home" if ("4979" in to_acc or "SECU" in to_acc) else "General Living"
+            
+            debit_row = [
+                f"TX-{now_str}-A", d_str, from_acc, "Transfer", "Transfer / Sweep",
+                f"Transfer to {to_acc}", float(trans_amt), gt, f"Outflow to {to_acc}{memo_str}", "Transfer Outflow"
+            ]
+            credit_row = [
+                f"TX-{now_str}-B", d_str, to_acc, "Transfer", "Transfer / Sweep",
+                f"Transfer from {from_acc}", float(trans_amt), gt, f"Inflow from {from_acc}{memo_str}", "Transfer Inflow"
+            ]
+            try:
+                append_multiple_tx_to_sheet([debit_row, credit_row])
+                new_rows_df = pd.DataFrame([
+                    {"Transaction_ID": debit_row[0], "Date": debit_row[1], "Account": debit_row[2], "Type": debit_row[3], "Category": debit_row[4], "Merchant": debit_row[5], "Amount": debit_row[6], "Goal_Tag": debit_row[7], "Item_Description": debit_row[8], "Notes": debit_row[9], "Date_DT": tx_date},
+                    {"Transaction_ID": credit_row[0], "Date": credit_row[1], "Account": credit_row[2], "Type": credit_row[3], "Category": credit_row[4], "Merchant": credit_row[5], "Amount": credit_row[6], "Goal_Tag": credit_row[7], "Item_Description": credit_row[8], "Notes": credit_row[9], "Date_DT": tx_date}
+                ])
+                st.session_state.df_tx = pd.concat([st.session_state.df_tx, new_rows_df], ignore_index=True)
                 
-                debit_row = [
-                    f"TX-{now_str}-A", d_str, from_acc, "Transfer", "Transfer / Sweep",
-                    f"Transfer to {to_acc}", float(trans_amt), gt, f"Outflow to {to_acc}{memo_str}", "Transfer Outflow"
-                ]
-                credit_row = [
-                    f"TX-{now_str}-B", d_str, to_acc, "Transfer", "Transfer / Sweep",
-                    f"Transfer from {from_acc}", float(trans_amt), gt, f"Inflow from {from_acc}{memo_str}", "Transfer Inflow"
-                ]
-                try:
-                    append_multiple_tx_to_sheet([debit_row, credit_row])
-                    st.session_state["success_notification"] = f"Transferred ${trans_amt:,.2f} from {from_acc} to {to_acc}!"
-                    st.rerun()
-                except Exception as err:
-                    st.error(f"Error: {err}")
+                curr_b = next((c["current_balance"] for c in live_cash_registry if c["name"] == from_acc), 0.0)
+                new_bal_str = f"${max(curr_b - float(trans_amt), 0.0):,.2f}"
+                close_dialog_and_notify(f"Transferred ${trans_amt:,.2f} from {from_acc} to {to_acc}!", san, new_bal_str)
+            except Exception as err:
+                st.error(f"Error: {err}")
 
 @st.dialog("Record Debit Expense")
 def modal_bank_expense(acc_name):
+    san = re.sub(r'[^a-zA-Z0-9_]', '_', acc_name)
     st.markdown(f"**Account:** `{acc_name}`")
-    with st.form(f"form_m_b_exp_{acc_name}", clear_on_submit=True):
-        amt = st.number_input("Amount ($)", value=None, min_value=0.01, step=1.00, format="%.2f", placeholder="0.00")
-        cat = st.selectbox("Category", categories_list)
-        vendor = st.text_input("Merchant / Store", placeholder="e.g. Landlord, Shell, Trader Joe's")
-        desc = st.text_input("Memo (Optional)", placeholder="e.g. Direct withdrawal")
-        tx_date = st.date_input("Date", value=datetime.today())
-        gt = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"])
-        
-        if st.form_submit_button("Save Expense"):
-            if amt is None or amt <= 0:
-                st.error("Please enter a valid expense amount.")
-            else:
-                row = [
-                    f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-                    tx_date.strftime("%Y-%m-%d"),
-                    acc_name,
-                    "Expense",
-                    cat,
-                    vendor,
-                    float(amt),
-                    gt,
-                    desc,
-                    "Card Quick Entry"
-                ]
-                try:
-                    append_tx_to_sheet(row)
-                    st.session_state["success_notification"] = f"Saved ${amt:,.2f} expense from {acc_name}!"
-                    st.rerun()
-                except Exception as err:
-                    st.error(f"Error: {err}")
+    
+    amt = st.number_input("Amount ($)", value=None, min_value=0.01, step=1.00, format="%.2f", placeholder="0.00", key=f"m_bexp_amt_{san}")
+    cat = st.selectbox("Category", categories_list, key=f"m_bexp_cat_{san}")
+    vendor = st.text_input("Merchant / Store", placeholder="e.g. Landlord, Shell, Trader Joe's", key=f"m_bexp_ven_{san}")
+    desc = st.text_input("Memo (Optional)", placeholder="e.g. Direct withdrawal", key=f"m_bexp_desc_{san}")
+    tx_date = st.date_input("Date", value=datetime.today(), key=f"m_bexp_date_{san}")
+    gt = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"], key=f"m_bexp_gt_{san}")
+    
+    if st.button("Save Expense", type="primary", key=f"m_bexp_btn_{san}"):
+        if amt is None or amt <= 0:
+            st.error("Please enter a valid expense amount.")
+        else:
+            row = [
+                f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                tx_date.strftime("%Y-%m-%d"),
+                acc_name,
+                "Expense",
+                cat,
+                vendor,
+                float(amt),
+                gt,
+                desc,
+                "Card Quick Entry"
+            ]
+            try:
+                append_tx_to_sheet(row)
+                new_row_df = pd.DataFrame([{
+                    "Transaction_ID": row[0], "Date": row[1], "Account": row[2], "Type": row[3],
+                    "Category": row[4], "Merchant": row[5], "Amount": row[6], "Goal_Tag": row[7],
+                    "Item_Description": row[8], "Notes": row[9], "Date_DT": tx_date
+                }])
+                st.session_state.df_tx = pd.concat([st.session_state.df_tx, new_row_df], ignore_index=True)
+                
+                curr_b = next((c["current_balance"] for c in live_cash_registry if c["name"] == acc_name), 0.0)
+                new_bal_str = f"${max(curr_b - float(amt), 0.0):,.2f}"
+                close_dialog_and_notify(f"Saved ${amt:,.2f} expense from {acc_name}!", san, new_bal_str)
+            except Exception as err:
+                st.error(f"Error: {err}")
 
 @st.dialog("Record Credit Card Charge")
 def modal_card_expense(card_name):
+    san = re.sub(r'[^a-zA-Z0-9_]', '_', card_name)
     st.markdown(f"**Card:** `{card_name}`")
-    with st.form(f"form_m_c_exp_{card_name}", clear_on_submit=True):
-        amt = st.number_input("Amount ($)", value=None, min_value=0.01, step=1.00, format="%.2f", placeholder="0.00")
-        cat = st.selectbox("Category", categories_list)
-        vendor = st.text_input("Merchant / Store", placeholder="e.g. Amazon, Shell, Quick Mart")
-        desc = st.text_input("Memo (Optional)", placeholder="e.g. Gas, Work lunch")
-        tx_date = st.date_input("Date", value=datetime.today())
-        gt = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"])
-        
-        if st.form_submit_button("Record Charge"):
-            if amt is None or amt <= 0:
-                st.error("Please enter a valid charge amount.")
-            else:
-                row = [
-                    f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-                    tx_date.strftime("%Y-%m-%d"),
-                    card_name,
-                    "Expense",
-                    cat,
-                    vendor,
-                    float(amt),
-                    gt,
-                    desc,
-                    "Card Quick Entry"
-                ]
-                try:
-                    append_tx_to_sheet(row)
-                    st.session_state["success_notification"] = f"Saved ${amt:,.2f} charge on {card_name}!"
-                    st.rerun()
-                except Exception as err:
-                    st.error(f"Error: {err}")
+    
+    amt = st.number_input("Amount ($)", value=None, min_value=0.01, step=1.00, format="%.2f", placeholder="0.00", key=f"m_cexp_amt_{san}")
+    cat = st.selectbox("Category", categories_list, key=f"m_cexp_cat_{san}")
+    vendor = st.text_input("Merchant / Store", placeholder="e.g. Amazon, Shell, Quick Mart", key=f"m_cexp_ven_{san}")
+    desc = st.text_input("Memo (Optional)", placeholder="e.g. Gas, Work lunch", key=f"m_cexp_desc_{san}")
+    tx_date = st.date_input("Date", value=datetime.today(), key=f"m_cexp_date_{san}")
+    gt = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"], key=f"m_cexp_gt_{san}")
+    
+    if st.button("Record Charge", type="primary", key=f"m_cexp_btn_{san}"):
+        if amt is None or amt <= 0:
+            st.error("Please enter a valid charge amount.")
+        else:
+            row = [
+                f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                tx_date.strftime("%Y-%m-%d"),
+                card_name,
+                "Expense",
+                cat,
+                vendor,
+                float(amt),
+                gt,
+                desc,
+                "Card Quick Entry"
+            ]
+            try:
+                append_tx_to_sheet(row)
+                new_row_df = pd.DataFrame([{
+                    "Transaction_ID": row[0], "Date": row[1], "Account": row[2], "Type": row[3],
+                    "Category": row[4], "Merchant": row[5], "Amount": row[6], "Goal_Tag": row[7],
+                    "Item_Description": row[8], "Notes": row[9], "Date_DT": tx_date
+                }])
+                st.session_state.df_tx = pd.concat([st.session_state.df_tx, new_row_df], ignore_index=True)
+                
+                curr_b = next((c["current_balance"] for c in (live_personal_cc + live_biz_cc) if c["name"] == card_name), 0.0)
+                new_bal_str = f"${(curr_b + float(amt)):.2f}"
+                close_dialog_and_notify(f"Saved ${amt:,.2f} charge on {card_name}!", san, new_bal_str)
+            except Exception as err:
+                st.error(f"Error: {err}")
 
 @st.dialog("Record Credit Card Payment")
 def modal_card_payment(card_name, current_balance):
+    san = re.sub(r'[^a-zA-Z0-9_]', '_', card_name)
     st.markdown(f"**Card:** `{card_name}` | **Balance:** `${current_balance:,.2f}`")
-    with st.form(f"form_m_c_pay_{card_name}", clear_on_submit=True):
-        pay_amt = st.number_input("Payment Amount ($)", value=None, min_value=0.01, step=1.00, format="%.2f", placeholder=f"{current_balance:.2f}" if current_balance > 0 else "0.00")
-        from_acc = st.selectbox("Paid From", deposit_accounts)
-        memo = st.text_input("Memo (Optional)", placeholder="e.g. Statement payoff, AZEO adjustment")
-        tx_date = st.date_input("Date", value=datetime.today())
-        
-        if st.form_submit_button("Submit Payment"):
-            if pay_amt is None or pay_amt <= 0:
-                st.error("Please enter a valid payment amount.")
-            else:
-                row = [
-                    f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-                    tx_date.strftime("%Y-%m-%d"),
-                    card_name,
-                    "CC Payment",
-                    "CC Payment",
-                    f"Paid from {from_acc}",
-                    float(pay_amt),
-                    "General Living",
-                    memo,
-                    "Card Quick Entry"
-                ]
-                try:
-                    append_tx_to_sheet(row)
-                    st.session_state["success_notification"] = f"Recorded ${pay_amt:,.2f} payment to {card_name}!"
-                    st.rerun()
-                except Exception as err:
-                    st.error(f"Error: {err}")
+    
+    pay_amt = st.number_input("Payment Amount ($)", value=None, min_value=0.01, step=1.00, format="%.2f", placeholder=f"{current_balance:.2f}" if current_balance > 0 else "0.00", key=f"m_cpay_amt_{san}")
+    from_acc = st.selectbox("Paid From", deposit_accounts, key=f"m_cpay_from_{san}")
+    memo = st.text_input("Memo (Optional)", placeholder="e.g. Statement payoff, AZEO adjustment", key=f"m_cpay_memo_{san}")
+    tx_date = st.date_input("Date", value=datetime.today(), key=f"m_cpay_date_{san}")
+    
+    if st.button("Submit Payment", type="primary", key=f"m_cpay_btn_{san}"):
+        if pay_amt is None or pay_amt <= 0:
+            st.error("Please enter a valid payment amount.")
+        else:
+            row = [
+                f"TX-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                tx_date.strftime("%Y-%m-%d"),
+                card_name,
+                "CC Payment",
+                "CC Payment",
+                f"Paid from {from_acc}",
+                float(pay_amt),
+                "General Living",
+                memo,
+                "Card Quick Entry"
+            ]
+            try:
+                append_tx_to_sheet(row)
+                new_row_df = pd.DataFrame([{
+                    "Transaction_ID": row[0], "Date": row[1], "Account": row[2], "Type": row[3],
+                    "Category": row[4], "Merchant": row[5], "Amount": row[6], "Goal_Tag": row[7],
+                    "Item_Description": row[8], "Notes": row[9], "Date_DT": tx_date
+                }])
+                st.session_state.df_tx = pd.concat([st.session_state.df_tx, new_row_df], ignore_index=True)
+                
+                curr_b = next((c["current_balance"] for c in (live_personal_cc + live_biz_cc) if c["name"] == card_name), 0.0)
+                new_bal_str = f"${max(curr_b - float(pay_amt), 0.0):.2f}"
+                close_dialog_and_notify(f"Recorded ${pay_amt:,.2f} payment to {card_name}!", san, new_bal_str)
+            except Exception as err:
+                st.error(f"Error: {err}")
 
 @st.dialog("➕ Add New Account to Registry")
 def open_new_account_dialog():
     st.caption("Register a new account or credit card. It will automatically update in Google Sheets and sync into your app.")
-    with st.form("new_account_form", clear_on_submit=True):
-        new_acc_name = st.text_input("Account Identifier (e.g. Capital One 1122)", placeholder="Card or Bank Name")
-        new_acc_type = st.selectbox("Account Type", ["Cash / Bank", "Personal CC", "Business CC"])
-        new_acc_role = st.text_input("Role / Memo (e.g. Dining Card, HYSA)", placeholder="Brief description")
-        new_acc_base = st.number_input("Starting Base Balance ($)", value=0.00, min_value=0.00, step=10.00, format="%.2f")
+    
+    new_acc_name = st.text_input("Account Identifier (e.g. Capital One 1122)", placeholder="Card or Bank Name", key="new_acc_name_f")
+    new_acc_type = st.selectbox("Account Type", ["Cash / Bank", "Personal CC", "Business CC"], key="new_acc_type_f")
+    new_acc_role = st.text_input("Role / Memo (e.g. Dining Card, HYSA)", placeholder="Brief description", key="new_acc_role_f")
+    new_acc_base = st.number_input("Starting Base Balance ($)", value=0.00, min_value=0.00, step=10.00, format="%.2f", key="new_acc_base_f")
+    
+    col_c1, col_c2, col_c3 = st.columns(3)
+    with col_c1:
+        new_limit = st.number_input("Credit Limit ($)", value=0.00, min_value=0.00, step=100.00, format="%.2f", key="new_acc_limit_f")
+    with col_c2:
+        new_due = st.number_input("Due Day of Month", min_value=-1, max_value=31, value=1, key="new_acc_due_f")
+    with col_c3:
+        new_close = st.number_input("Statement Close Day", min_value=1, max_value=31, value=4, key="new_acc_close_f")
         
-        col_c1, col_c2, col_c3 = st.columns(3)
-        with col_c1:
-            new_limit = st.number_input("Credit Limit ($)", value=0.00, min_value=0.00, step=100.00, format="%.2f")
-        with col_c2:
-            new_due = st.number_input("Due Day of Month", min_value=-1, max_value=31, value=1)
-        with col_c3:
-            new_close = st.number_input("Statement Close Day", min_value=1, max_value=31, value=4)
-            
-        if st.form_submit_button("Save Account"):
-            if not new_acc_name.strip():
-                st.error("Please provide an account name.")
-            else:
-                row = [
-                    new_acc_name.strip(),
-                    new_acc_type,
-                    new_acc_role.strip(),
-                    float(new_acc_base),
-                    float(new_limit) if new_acc_type != "Cash / Bank" else 0.0,
-                    int(new_due) if new_acc_type != "Cash / Bank" else 0,
-                    int(new_close) if new_acc_type != "Cash / Bank" else 0
-                ]
-                try:
-                    append_account_to_sheet(row)
-                    st.session_state["success_notification"] = f"Added {new_acc_name} to Accounts_Master!"
-                    st.rerun()
-                except Exception as err:
-                    st.error(f"Error saving account: {err}")
+    if st.button("Save Account", type="primary", key="new_acc_btn_f"):
+        if not new_acc_name.strip():
+            st.error("Please provide an account name.")
+        else:
+            row = [
+                new_acc_name.strip(),
+                new_acc_type,
+                new_acc_role.strip(),
+                float(new_acc_base),
+                float(new_limit) if new_acc_type != "Cash / Bank" else 0.0,
+                int(new_due) if new_acc_type != "Cash / Bank" else 0,
+                int(new_close) if new_acc_type != "Cash / Bank" else 0
+            ]
+            try:
+                append_account_to_sheet(row)
+                st.session_state.df_registry = fetch_accounts_registry()
+                st.rerun()
+            except Exception as err:
+                st.error(f"Error saving account: {err}")
 
 # ==========================================
 # 6. AI EXECUTIVE SUMMARY & KEY FETCHER
@@ -904,7 +988,7 @@ tabs = st.tabs([
 ])
 
 # ------------------------------------------
-# TAB 1: ACCOUNTS & CREDIT HUB (DEFAULT LOAD PAGE)
+# TAB 1: ACCOUNTS & CREDIT HUB
 # ------------------------------------------
 with tabs[0]:
     col_h1, col_h2 = st.columns([3.6, 1.2], vertical_alignment="center")
@@ -1030,7 +1114,7 @@ with tabs[0]:
             if st.button(f"btn_bcpay_{san_name}", key=f"trig_bcpay_{san_name}"):
                 modal_card_payment(c['name'], c['current_balance'])
 
-    # 5. HIGH-SPEED EVENT DELEGATOR & MODAL POPOVER COMPATIBILITY BRIDGE
+    # 5. CARD TRIGGER BUTTON DISPATCHER
     components.html("""
     <script>
     (function() {
@@ -1042,7 +1126,6 @@ with tabs[0]:
         }
         if (!parentDoc) return;
         
-        // 1. ATTACH CARD TRIGGER BUTTON DISPATCHER
         if (!window.parent._hubClickAttached) {
             window.parent._hubClickAttached = true;
             parentDoc.addEventListener('click', function(e) {
@@ -1059,69 +1142,6 @@ with tabs[0]:
                     targetBtn.click();
                 }
             }, true);
-        }
-
-        // 2. ATTACH POPUP MODAL DROPDOWN (SELECTBOX) FIX
-        if (!window.parent._hubSelectFixAttached) {
-            window.parent._hubSelectFixAttached = true;
-
-            // Stop focus-trap from stealing focus when popover options are clicked
-            parentDoc.addEventListener('focusin', function(e) {
-                if (e.target && e.target.closest && e.target.closest('div[data-baseweb="popover"]')) {
-                    e.stopImmediatePropagation();
-                }
-            }, true);
-
-            // Immediate desktop 1-click select on mousedown
-            parentDoc.addEventListener('mousedown', function(e) {
-                var opt = e.target.closest('li[role="option"]');
-                if (opt) {
-                    opt.click();
-                }
-            }, true);
-
-            // Touch tracking for mobile to prevent accidental selection during touch-scrolling
-            var touchStartX = 0;
-            var touchStartY = 0;
-            var isTouchMove = false;
-
-            parentDoc.addEventListener('touchstart', function(e) {
-                var opt = e.target.closest('li[role="option"]');
-                if (opt && e.touches.length > 0) {
-                    touchStartX = e.touches[0].clientX;
-                    touchStartY = e.touches[0].clientY;
-                    isTouchMove = false;
-                }
-            }, { capture: true, passive: true });
-
-            parentDoc.addEventListener('touchmove', function(e) {
-                if (e.touches.length > 0) {
-                    var dx = Math.abs(e.touches[0].clientX - touchStartX);
-                    var dy = Math.abs(e.touches[0].clientY - touchStartY);
-                    if (dx > 10 || dy > 10) {
-                        isTouchMove = true;
-                    }
-                }
-            }, { capture: true, passive: true });
-
-            parentDoc.addEventListener('touchend', function(e) {
-                var opt = e.target.closest('li[role="option"]');
-                if (opt && !isTouchMove) {
-                    opt.click();
-                }
-            }, { capture: true, passive: true });
-
-            // Mark dropdown popovers as focus-lock-disabled
-            var observer = new MutationObserver(function() {
-                var popovers = parentDoc.querySelectorAll('div[data-baseweb="popover"]');
-                popovers.forEach(function(pop) {
-                    if (!pop.hasAttribute('data-focus-lock-disabled')) {
-                        pop.setAttribute('data-focus-lock-disabled', 'true');
-                        pop.setAttribute('data-no-focus-lock', 'true');
-                    }
-                });
-            });
-            observer.observe(parentDoc.body, { childList: true, subtree: true });
         }
     })();
     </script>
@@ -1179,7 +1199,14 @@ with tabs[1]:
                     ]
                     try:
                         append_tx_to_sheet(new_row_values)
-                        st.session_state["success_notification"] = f"Written: ${amt:,.2f} to {selected_cat} on {selected_acc}!"
+                        new_r_df = pd.DataFrame([{
+                            "Transaction_ID": tx_id, "Date": date_str, "Account": selected_acc,
+                            "Type": "Expense", "Category": selected_cat, "Merchant": vendor,
+                            "Amount": float(amt), "Goal_Tag": goal_tag, "Item_Description": item_desc,
+                            "Notes": "Mobile App Entry", "Date_DT": entry_date
+                        }])
+                        st.session_state.df_tx = pd.concat([st.session_state.df_tx, new_r_df], ignore_index=True)
+                        st.success(f"✅ Saved ${amt:.2f} to {selected_cat} on {selected_acc}!")
                         st.rerun()
                     except Exception as err:
                         st.error(f"❌ Write Error: {str(err)}\n{traceback.format_exc()}")
@@ -1215,7 +1242,14 @@ with tabs[1]:
                     ]
                     try:
                         append_tx_to_sheet(new_row_values)
-                        st.session_state["success_notification"] = f"Logged ${inc_amt:,.2f} {inc_cat} into {inc_acc}!"
+                        new_r_df = pd.DataFrame([{
+                            "Transaction_ID": tx_id, "Date": date_str, "Account": inc_acc,
+                            "Type": "Income", "Category": inc_cat, "Merchant": inc_desc,
+                            "Amount": float(inc_amt), "Goal_Tag": goal, "Item_Description": inc_item,
+                            "Notes": "Mobile App Entry", "Date_DT": inc_date
+                        }])
+                        st.session_state.df_tx = pd.concat([st.session_state.df_tx, new_r_df], ignore_index=True)
+                        st.success(f"✅ Logged ${inc_amt:.2f} {inc_cat} into {inc_acc}!")
                         st.rerun()
                     except Exception as err:
                         st.error(f"❌ Write Error: {str(err)}\n{traceback.format_exc()}")
@@ -1267,7 +1301,14 @@ with tabs[1]:
                     ]
                     try:
                         append_tx_to_sheet(new_row_values)
-                        st.session_state["success_notification"] = f"Recorded ${pay_amt:,.2f} payment to {target_card}!"
+                        new_r_df = pd.DataFrame([{
+                            "Transaction_ID": tx_id, "Date": date_str, "Account": target_card,
+                            "Type": "CC Payment", "Category": "CC Payment", "Merchant": f"Paid from {from_account}",
+                            "Amount": float(pay_amt), "Goal_Tag": "General Living", "Item_Description": pay_item,
+                            "Notes": "Mobile App Entry", "Date_DT": pay_date
+                        }])
+                        st.session_state.df_tx = pd.concat([st.session_state.df_tx, new_r_df], ignore_index=True)
+                        st.success(f"✅ Recorded ${pay_amt:.2f} payment to {target_card}!")
                         st.rerun()
                     except Exception as err:
                         st.error(f"❌ Write Error: {str(err)}\n{traceback.format_exc()}")
@@ -1308,7 +1349,12 @@ with tabs[1]:
                     
                     try:
                         append_multiple_tx_to_sheet([debit_row, credit_row])
-                        st.session_state["success_notification"] = f"Transferred ${trans_amt:,.2f} from {from_trans_acc} to {to_trans_acc}!"
+                        new_r_df = pd.DataFrame([
+                            {"Transaction_ID": debit_row[0], "Date": date_str, "Account": from_trans_acc, "Type": "Transfer", "Category": "Transfer / Sweep", "Merchant": f"Transfer to {to_trans_acc}", "Amount": float(trans_amt), "Goal_Tag": goal_tag, "Item_Description": f"Outflow to {to_trans_acc}{memo_str}", "Notes": "Transfer Outflow", "Date_DT": trans_date},
+                            {"Transaction_ID": credit_row[0], "Date": date_str, "Account": to_trans_acc, "Type": "Transfer", "Category": "Transfer / Sweep", "Merchant": f"Transfer from {from_trans_acc}", "Amount": float(trans_amt), "Goal_Tag": goal_tag, "Item_Description": f"Inflow from {from_trans_acc}{memo_str}", "Notes": "Transfer Inflow", "Date_DT": trans_date}
+                        ])
+                        st.session_state.df_tx = pd.concat([st.session_state.df_tx, new_r_df], ignore_index=True)
+                        st.success(f"✅ Transferred ${trans_amt:.2f} from {from_trans_acc} to {to_trans_acc}!")
                         st.rerun()
                     except Exception as err:
                         st.error(f"❌ Write Error: {str(err)}\n{traceback.format_exc()}")
@@ -1334,7 +1380,6 @@ with tabs[2]:
     ref_date = st.session_state.current_analytics_date
     df_clean = df_tx.copy() if not df_tx.empty else pd.DataFrame()
 
-    # BLOCK 1: WEEKLY ANALYTICS
     week_start = ref_date - timedelta(days=ref_date.weekday())
     week_end = week_start + timedelta(days=6)
 
@@ -1372,7 +1417,6 @@ with tabs[2]:
 
     w_exp_df = df_week[df_week["Type"] == "Expense"] if not df_week.empty else pd.DataFrame()
     
-    # RADIAL PROGRESSION DONUT DATA (WEEKLY)
     w_donut_labels = []
     w_donut_values = []
     w_donut_colors = []
