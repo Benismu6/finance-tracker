@@ -643,7 +643,7 @@ def render_account_card(title, subtitle, right_val, right_sub, extra_left="", ex
     st.markdown(card_html, unsafe_allow_html=True)
 
 # ==========================================
-# 5. DYNAMIC TRANSACTION MODALS (TOUCH-SAFE)
+# 5. DYNAMIC TRANSACTION MODALS (AUTO-CLOSING)
 # ==========================================
 all_account_names = list(df_registry["Account_Name"])
 deposit_accounts = list(df_registry[df_registry["Account_Type"] == "Cash / Bank"]["Account_Name"])
@@ -653,7 +653,7 @@ def modal_bank_income(acc_name):
     st.markdown(f"**Target Account:** `{acc_name}`")
     with st.form(f"form_m_inc_{acc_name}", clear_on_submit=True):
         inc_amt = st.number_input("Amount ($)", value=None, min_value=0.01, step=1.00, format="%.2f", placeholder="0.00")
-        inc_cat = st.radio("Source", ["W2 Salary", "Uber Income", "Other Income"], horizontal=True, key=f"dlg_inc_cat_{acc_name}")
+        inc_cat = st.selectbox("Source", ["W2 Salary", "Uber Income", "Other Income"])
         payer = st.text_input("Payer / Store", placeholder="e.g. Employer Payroll, Uber Payout, Client")
         memo = st.text_input("Memo (Optional)", placeholder="e.g. Paycheck deposit")
         tx_date = st.date_input("Date", value=datetime.today())
@@ -689,7 +689,7 @@ def modal_bank_transfer(from_acc):
     target_options = other_accounts if other_accounts else deposit_accounts
     with st.form(f"form_m_trans_{from_acc}", clear_on_submit=True):
         trans_amt = st.number_input("Transfer Amount ($)", value=None, min_value=0.01, step=10.00, format="%.2f", placeholder="0.00")
-        to_acc = st.radio("Transfer Into", target_options, key=f"dlg_trans_to_{from_acc}")
+        to_acc = st.selectbox("Transfer Into", target_options)
         memo = st.text_input("Memo (Optional)", placeholder="e.g. Weekly savings sweep")
         tx_date = st.date_input("Date", value=datetime.today())
         
@@ -724,11 +724,11 @@ def modal_bank_expense(acc_name):
     st.markdown(f"**Account:** `{acc_name}`")
     with st.form(f"form_m_b_exp_{acc_name}", clear_on_submit=True):
         amt = st.number_input("Amount ($)", value=None, min_value=0.01, step=1.00, format="%.2f", placeholder="0.00")
+        cat = st.selectbox("Category", categories_list)
         vendor = st.text_input("Merchant / Store", placeholder="e.g. Landlord, Shell, Trader Joe's")
-        cat = st.radio("Category", categories_list, key=f"dlg_bexp_cat_{acc_name}")
-        gt = st.radio("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"], horizontal=True, key=f"dlg_bexp_gt_{acc_name}")
         desc = st.text_input("Memo (Optional)", placeholder="e.g. Direct withdrawal")
         tx_date = st.date_input("Date", value=datetime.today())
+        gt = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"])
         
         if st.form_submit_button("Save Expense"):
             if amt is None or amt <= 0:
@@ -758,11 +758,11 @@ def modal_card_expense(card_name):
     st.markdown(f"**Card:** `{card_name}`")
     with st.form(f"form_m_c_exp_{card_name}", clear_on_submit=True):
         amt = st.number_input("Amount ($)", value=None, min_value=0.01, step=1.00, format="%.2f", placeholder="0.00")
+        cat = st.selectbox("Category", categories_list)
         vendor = st.text_input("Merchant / Store", placeholder="e.g. Amazon, Shell, Quick Mart")
-        cat = st.radio("Category", categories_list, key=f"dlg_cexp_cat_{card_name}")
-        gt = st.radio("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"], horizontal=True, key=f"dlg_cexp_gt_{card_name}")
         desc = st.text_input("Memo (Optional)", placeholder="e.g. Gas, Work lunch")
         tx_date = st.date_input("Date", value=datetime.today())
+        gt = st.selectbox("Goal Tag", ["General Living", "Baltimore 1st Home", "Emergency Vault", "Business"])
         
         if st.form_submit_button("Record Charge"):
             if amt is None or amt <= 0:
@@ -792,7 +792,7 @@ def modal_card_payment(card_name, current_balance):
     st.markdown(f"**Card:** `{card_name}` | **Balance:** `${current_balance:,.2f}`")
     with st.form(f"form_m_c_pay_{card_name}", clear_on_submit=True):
         pay_amt = st.number_input("Payment Amount ($)", value=None, min_value=0.01, step=1.00, format="%.2f", placeholder=f"{current_balance:.2f}" if current_balance > 0 else "0.00")
-        from_acc = st.radio("Paid From", deposit_accounts, horizontal=True, key=f"dlg_cpay_from_{card_name}")
+        from_acc = st.selectbox("Paid From", deposit_accounts)
         memo = st.text_input("Memo (Optional)", placeholder="e.g. Statement payoff, AZEO adjustment")
         tx_date = st.date_input("Date", value=datetime.today())
         
@@ -818,43 +818,6 @@ def modal_card_payment(card_name, current_balance):
                     st.rerun()
                 except Exception as err:
                     st.error(f"Error: {err}")
-
-@st.dialog("➕ Add New Account to Registry")
-def open_new_account_dialog():
-    st.caption("Register a new account or credit card. It will automatically update in Google Sheets and sync into your app.")
-    with st.form("new_account_form", clear_on_submit=True):
-        new_acc_name = st.text_input("Account Identifier (e.g. Capital One 1122)", placeholder="Card or Bank Name")
-        new_acc_type = st.radio("Account Type", ["Cash / Bank", "Personal CC", "Business CC"], horizontal=True, key="dlg_new_acc_type")
-        new_acc_role = st.text_input("Role / Memo (e.g. Dining Card, HYSA)", placeholder="Brief description")
-        new_acc_base = st.number_input("Starting Base Balance ($)", value=0.00, min_value=0.00, step=10.00, format="%.2f")
-        
-        col_c1, col_c2, col_c3 = st.columns(3)
-        with col_c1:
-            new_limit = st.number_input("Credit Limit ($)", value=0.00, min_value=0.00, step=100.00, format="%.2f")
-        with col_c2:
-            new_due = st.number_input("Due Day of Month", min_value=-1, max_value=31, value=1)
-        with col_c3:
-            new_close = st.number_input("Statement Close Day", min_value=1, max_value=31, value=4)
-            
-        if st.form_submit_button("Save Account"):
-            if not new_acc_name.strip():
-                st.error("Please provide an account name.")
-            else:
-                row = [
-                    new_acc_name.strip(),
-                    new_acc_type,
-                    new_acc_role.strip(),
-                    float(new_acc_base),
-                    float(new_limit) if new_acc_type != "Cash / Bank" else 0.0,
-                    int(new_due) if new_acc_type != "Cash / Bank" else 0,
-                    int(new_close) if new_acc_type != "Cash / Bank" else 0
-                ]
-                try:
-                    append_account_to_sheet(row)
-                    st.session_state["success_notification"] = f"Added {new_acc_name} to Accounts_Master!"
-                    st.rerun()
-                except Exception as err:
-                    st.error(f"Error saving account: {err}")
 
 # ==========================================
 # 6. AI EXECUTIVE SUMMARY & KEY FETCHER
