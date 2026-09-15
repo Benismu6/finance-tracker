@@ -113,7 +113,6 @@ st.markdown("""
         box-shadow: 0 2px 6px rgba(37,99,235,0.4);
     }
 
-    /* SCALED-DOWN 20% ALIGNED ADD ACCOUNT BUTTON */
     div.small-add-btn button {
         height: 30px !important;
         font-size: 11px !important;
@@ -776,17 +775,13 @@ def get_tx_rows_html(acc_name):
                 amt_color = "#34D399" if t_type == "Income" else ("#60A5FA" if t_type == "CC Payment" else "#F87171")
                 prefix = "+" if t_type == "Income" else "-"
                 
-                html += f"""
-                <div style="display:flex; justify-content:space-between; align-items:center; background:#162032; border-radius:6px; padding:6px 10px; margin-bottom:4px; font-size:12px; border:1px solid #334155;">
-                    <div>
-                        <span style="color:#CBD5E1; font-weight:600;">{label}</span>
-                        <div style="font-size:10px; color:#64748B;">{date_val} • {t_type}</div>
-                    </div>
-                    <div style="font-weight:800; color:{amt_color}; font-size:13px; text-align:right;">
-                        {prefix}${amt:,.2f}
-                    </div>
-                </div>
-                """
+                html += (
+                    f'<div style="display:flex; justify-content:space-between; align-items:center; background:#162032; border-radius:6px; padding:6px 10px; margin-bottom:4px; font-size:12px; border:1px solid #334155;">'
+                    f'<div><span style="color:#CBD5E1; font-weight:600;">{label}</span>'
+                    f'<div style="font-size:10px; color:#64748B;">{date_val} • {t_type}</div></div>'
+                    f'<div style="font-weight:800; color:{amt_color}; font-size:13px; text-align:right;">{prefix}${amt:,.2f}</div>'
+                    f'</div>'
+                )
             return html
         else:
             return "<div style='font-size:12px; color:#64748B; padding:4px 0;'>ℹ️ No transactions recorded for this account yet.</div>"
@@ -816,34 +811,28 @@ with tabs[0]:
         tx_rows = get_tx_rows_html(acc['name'])
         sanitized_name = acc['name'].replace(' ', '_')
         
-        btn_html = f"""
-        <div style="display:flex; gap:4px; margin-bottom:8px; flex-wrap:nowrap; width:100%;">
-            <button class="drawer-btn drawer-btn-emerald" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_INC_{sanitized_name}'; }}); if(b) b.click();">💵 Deposit</button>
-            <button class="drawer-btn drawer-btn-purple" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_TRANS_{sanitized_name}'; }}); if(b) b.click();">🔁 Transfer</button>
-            <button class="drawer-btn drawer-btn-slate" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_BEXP_{sanitized_name}'; }}); if(b) b.click();">💸 Expense</button>
-        </div>
-        """
+        btn_html = (
+            f'<div style="display:flex; gap:4px; margin-bottom:8px; flex-wrap:nowrap; width:100%;">'
+            f'<button class="drawer-btn drawer-btn-emerald" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll(\'button\')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === \'TRIG_INC_{sanitized_name}\'; }}); if(b) b.click();">💵 Deposit</button>'
+            f'<button class="drawer-btn drawer-btn-purple" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll(\'button\')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === \'TRIG_TRANS_{sanitized_name}\'; }}); if(b) b.click();">🔁 Transfer</button>'
+            f'<button class="drawer-btn drawer-btn-slate" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll(\'button\')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === \'TRIG_BEXP_{sanitized_name}\'; }}); if(b) b.click();">💸 Expense</button>'
+            f'</div>'
+        )
         
-        st.markdown(f"""
-        <details class="card-container">
-            <summary>
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <div>
-                        <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{acc['name']}</span>
-                        <div style="font-size:12px; color:#94A3B8;">{acc['role']}</div>
-                    </div>
-                    <div style="text-align:right;">
-                        <span style="font-weight:800; font-size:18px; color:#FFFFFF;">${bal:,.2f}</span>
-                        <div style="font-size:11px; color:#94A3B8;">{pct_of_total:.1f}% of cash</div>
-                    </div>
-                </div>
-            </summary>
-            <div class="card-drawer">
-                {btn_html}
-                {tx_rows}
-            </div>
-        </details>
-        """, unsafe_allow_html=True)
+        card_html = (
+            f'<details class="card-container">'
+            f'<summary>'
+            f'<div style="display:flex; justify-content:space-between; align-items:center;">'
+            f'<div><span style="font-weight:700; font-size:15px; color:#F8FAFC;">{acc["name"]}</span>'
+            f'<div style="font-size:12px; color:#94A3B8;">{acc["role"]}</div></div>'
+            f'<div style="text-align:right;"><span style="font-weight:800; font-size:18px; color:#FFFFFF;">${bal:,.2f}</span>'
+            f'<div style="font-size:11px; color:#94A3B8;">{pct_of_total:.1f}% of cash</div></div>'
+            f'</div>'
+            f'</summary>'
+            f'<div class="card-drawer">{btn_html}{tx_rows}</div>'
+            f'</details>'
+        )
+        st.markdown(card_html, unsafe_allow_html=True)
 
     st.divider()
 
@@ -857,37 +846,31 @@ with tabs[0]:
         tx_rows = get_tx_rows_html(c['name'])
         sanitized_name = c['name'].replace(' ', '_')
         
-        btn_html = f"""
-        <div style="display:flex; gap:4px; margin-bottom:8px; flex-wrap:nowrap; width:100%;">
-            <button class="drawer-btn drawer-btn-blue" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_CEXP_{sanitized_name}'; }}); if(b) b.click();">💳 Charge</button>
-            <button class="drawer-btn drawer-btn-purple" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_CPAY_{sanitized_name}'; }}); if(b) b.click();">🔄 Pay Card</button>
-        </div>
-        """
+        btn_html = (
+            f'<div style="display:flex; gap:4px; margin-bottom:8px; flex-wrap:nowrap; width:100%;">'
+            f'<button class="drawer-btn drawer-btn-blue" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll(\'button\')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === \'TRIG_CEXP_{sanitized_name}\'; }}); if(b) b.click();">💳 Charge</button>'
+            f'<button class="drawer-btn drawer-btn-purple" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll(\'button\')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === \'TRIG_CPAY_{sanitized_name}\'; }}); if(b) b.click();">🔄 Pay Card</button>'
+            f'</div>'
+        )
         
-        st.markdown(f"""
-        <details class="card-container">
-            <summary>
-                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                    <div>
-                        <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{c['name']}</span>
-                        <div style="font-size:12px; color:#94A3B8;">Limit: ${limit:,.0f} | Closes: {c['close_str']}</div>
-                    </div>
-                    <div style="text-align:right;">
-                        <span style="font-weight:800; font-size:18px; color:#FFFFFF;">${bal:.2f}</span>
-                        <div style="font-size:11px; color:#94A3B8;">({util:.1f}%)</div>
-                    </div>
-                </div>
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-                    <span style="font-size:12px; color:#CBD5E1;">{c['action_text']}</span>
-                    <div>{c['badge_html']}</div>
-                </div>
-            </summary>
-            <div class="card-drawer">
-                {btn_html}
-                {tx_rows}
-            </div>
-        </details>
-        """, unsafe_allow_html=True)
+        card_html = (
+            f'<details class="card-container">'
+            f'<summary>'
+            f'<div style="display:flex; justify-content:space-between; align-items:flex-start;">'
+            f'<div><span style="font-weight:700; font-size:15px; color:#F8FAFC;">{c["name"]}</span>'
+            f'<div style="font-size:12px; color:#94A3B8;">Limit: ${limit:,.0f} | Closes: {c["close_str"]}</div></div>'
+            f'<div style="text-align:right;"><span style="font-weight:800; font-size:18px; color:#FFFFFF;">${bal:.2f}</span>'
+            f'<div style="font-size:11px; color:#94A3B8;">({util:.1f}%)</div></div>'
+            f'</div>'
+            f'<div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">'
+            f'<span style="font-size:12px; color:#CBD5E1;">{c["action_text"]}</span>'
+            f'<div>{c["badge_html"]}</div>'
+            f'</div>'
+            f'</summary>'
+            f'<div class="card-drawer">{btn_html}{tx_rows}</div>'
+            f'</details>'
+        )
+        st.markdown(card_html, unsafe_allow_html=True)
 
     st.divider()
 
@@ -899,36 +882,30 @@ with tabs[0]:
         tx_rows = get_tx_rows_html(c['name'])
         sanitized_name = c['name'].replace(' ', '_')
         
-        btn_html = f"""
-        <div style="display:flex; gap:4px; margin-bottom:8px; flex-wrap:nowrap; width:100%;">
-            <button class="drawer-btn drawer-btn-blue" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_CEXP_{sanitized_name}'; }}); if(b) b.click();">💳 Charge</button>
-            <button class="drawer-btn drawer-btn-purple" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_CPAY_{sanitized_name}'; }}); if(b) b.click();">🔄 Pay Card</button>
-        </div>
-        """
+        btn_html = (
+            f'<div style="display:flex; gap:4px; margin-bottom:8px; flex-wrap:nowrap; width:100%;">'
+            f'<button class="drawer-btn drawer-btn-blue" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll(\'button\')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === \'TRIG_CEXP_{sanitized_name}\'; }}); if(b) b.click();">💳 Charge</button>'
+            f'<button class="drawer-btn drawer-btn-purple" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll(\'button\')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === \'TRIG_CPAY_{sanitized_name}\'; }}); if(b) b.click();">🔄 Pay Card</button>'
+            f'</div>'
+        )
         
-        st.markdown(f"""
-        <details class="card-container">
-            <summary>
-                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                    <div>
-                        <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{c['name']}</span>
-                        <div style="font-size:12px; color:#94A3B8;">Business Card</div>
-                    </div>
-                    <div style="text-align:right;">
-                        <span style="font-weight:800; font-size:18px; color:#FFFFFF;">${bal:.2f}</span>
-                    </div>
-                </div>
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-                    <span style="font-size:12px; color:#CBD5E1;">Due: {c['due_str']} | Closes: {c['close_str']}</span>
-                    <div><span class="badge-biz">💼 BUSINESS</span></div>
-                </div>
-            </summary>
-            <div class="card-drawer">
-                {btn_html}
-                {tx_rows}
-            </div>
-        </details>
-        """, unsafe_allow_html=True)
+        card_html = (
+            f'<details class="card-container">'
+            f'<summary>'
+            f'<div style="display:flex; justify-content:space-between; align-items:flex-start;">'
+            f'<div><span style="font-weight:700; font-size:15px; color:#F8FAFC;">{c["name"]}</span>'
+            f'<div style="font-size:12px; color:#94A3B8;">Business Card</div></div>'
+            f'<div style="text-align:right;"><span style="font-weight:800; font-size:18px; color:#FFFFFF;">${bal:.2f}</span></div>'
+            f'</div>'
+            f'<div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">'
+            f'<span style="font-size:12px; color:#CBD5E1;">Due: {c["due_str"]} | Closes: {c["close_str"]}</span>'
+            f'<div><span class="badge-biz">💼 BUSINESS</span></div>'
+            f'</div>'
+            f'</summary>'
+            f'<div class="card-drawer">{btn_html}{tx_rows}</div>'
+            f'</details>'
+        )
+        st.markdown(card_html, unsafe_allow_html=True)
 
     with st.container(key="hidden_triggers"):
         for acc in live_cash_registry:
