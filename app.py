@@ -113,11 +113,13 @@ st.markdown("""
         box-shadow: 0 2px 6px rgba(37,99,235,0.4);
     }
 
+    /* SCALED-DOWN 20% ALIGNED ADD ACCOUNT BUTTON */
     div.small-add-btn button {
-        height: 32px !important;
+        height: 30px !important;
         font-size: 11px !important;
-        padding: 4px 10px !important;
+        padding: 3px 10px !important;
         border-radius: 8px !important;
+        margin: 0 !important;
     }
 
     /* CARD CONTAINER STYLING */
