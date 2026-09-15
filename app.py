@@ -9,6 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 import gspread
 from google.oauth2.service_account import Credentials
 import google.generativeai as genai
+import streamlit.components.v1 as components
 
 # ==========================================
 # 1. PAGE SETUP & HIGH-CONTRAST CSS
@@ -159,7 +160,7 @@ st.markdown("""
         align-items: center;
         justify-content: center;
         padding: 4px 6px;
-        font-size: 10px;
+        font-size: 11px;
         font-weight: 700;
         border-radius: 6px;
         text-decoration: none !important;
@@ -208,18 +209,23 @@ st.markdown("""
         background-color: #475569;
     }
 
-    div.st-key-hidden_triggers,
-    div.st-key-hidden_triggers * {
+    /* INVISIBLE OFF-SCREEN TRIGGER CONTAINER */
+    div.st-key-hidden_triggers {
         position: fixed !important;
         top: -9999px !important;
         left: -9999px !important;
         width: 1px !important;
         height: 1px !important;
-        opacity: 0 !important;
-        pointer-events: none !important;
+        opacity: 0.01 !important;
         overflow: hidden !important;
-        margin: 0 !important;
+        z-index: -9999 !important;
+    }
+    div.st-key-hidden_triggers button {
+        opacity: 0.01 !important;
+        height: 1px !important;
+        width: 1px !important;
         padding: 0 !important;
+        margin: 0 !important;
     }
 
     .badge-opt { background-color: #065F46; color: #6EE7B7; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
@@ -813,9 +819,9 @@ with tabs[0]:
         
         btn_html = (
             f'<div style="display:flex; gap:4px; margin-bottom:8px; flex-wrap:nowrap; width:100%;">'
-            f'<button class="drawer-btn drawer-btn-emerald" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll(\'button\')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === \'TRIG_INC_{sanitized_name}\'; }}); if(b) b.click();">💵 Deposit</button>'
-            f'<button class="drawer-btn drawer-btn-purple" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll(\'button\')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === \'TRIG_TRANS_{sanitized_name}\'; }}); if(b) b.click();">🔁 Transfer</button>'
-            f'<button class="drawer-btn drawer-btn-slate" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll(\'button\')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === \'TRIG_BEXP_{sanitized_name}\'; }}); if(b) b.click();">💸 Expense</button>'
+            f'<button class="drawer-btn drawer-btn-emerald" type="button" data-trigger="trig_inc_{sanitized_name}">💵 Deposit</button>'
+            f'<button class="drawer-btn drawer-btn-purple" type="button" data-trigger="trig_trans_{sanitized_name}">🔁 Transfer</button>'
+            f'<button class="drawer-btn drawer-btn-slate" type="button" data-trigger="trig_bexp_{sanitized_name}">💸 Expense</button>'
             f'</div>'
         )
         
@@ -848,8 +854,8 @@ with tabs[0]:
         
         btn_html = (
             f'<div style="display:flex; gap:4px; margin-bottom:8px; flex-wrap:nowrap; width:100%;">'
-            f'<button class="drawer-btn drawer-btn-blue" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll(\'button\')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === \'TRIG_CEXP_{sanitized_name}\'; }}); if(b) b.click();">💳 Charge</button>'
-            f'<button class="drawer-btn drawer-btn-purple" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll(\'button\')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === \'TRIG_CPAY_{sanitized_name}\'; }}); if(b) b.click();">🔄 Pay Card</button>'
+            f'<button class="drawer-btn drawer-btn-blue" type="button" data-trigger="trig_cexp_{sanitized_name}">💳 Charge</button>'
+            f'<button class="drawer-btn drawer-btn-purple" type="button" data-trigger="trig_cpay_{sanitized_name}">🔄 Pay Card</button>'
             f'</div>'
         )
         
@@ -884,8 +890,8 @@ with tabs[0]:
         
         btn_html = (
             f'<div style="display:flex; gap:4px; margin-bottom:8px; flex-wrap:nowrap; width:100%;">'
-            f'<button class="drawer-btn drawer-btn-blue" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll(\'button\')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === \'TRIG_CEXP_{sanitized_name}\'; }}); if(b) b.click();">💳 Charge</button>'
-            f'<button class="drawer-btn drawer-btn-purple" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll(\'button\')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === \'TRIG_CPAY_{sanitized_name}\'; }}); if(b) b.click();">🔄 Pay Card</button>'
+            f'<button class="drawer-btn drawer-btn-blue" type="button" data-trigger="trig_bcexp_{sanitized_name}">💳 Charge</button>'
+            f'<button class="drawer-btn drawer-btn-purple" type="button" data-trigger="trig_bcpay_{sanitized_name}">🔄 Pay Card</button>'
             f'</div>'
         )
         
@@ -907,55 +913,74 @@ with tabs[0]:
         )
         st.markdown(card_html, unsafe_allow_html=True)
 
+    # 4. OFF-SCREEN STREAMLIT BUTTON TRIGGERS
     with st.container(key="hidden_triggers"):
         for acc in live_cash_registry:
             san_name = acc['name'].replace(' ', '_')
-            if st.button(f"TRIG_INC_{san_name}", key=f"trig_inc_{san_name}"):
+            if st.button(f"trig_inc_{san_name}", key=f"trig_inc_{san_name}"):
                 modal_bank_income(acc['name'])
-            if st.button(f"TRIG_TRANS_{san_name}", key=f"trig_trans_{san_name}"):
+            if st.button(f"trig_trans_{san_name}", key=f"trig_trans_{san_name}"):
                 modal_bank_transfer(acc['name'])
-            if st.button(f"TRIG_BEXP_{san_name}", key=f"trig_bexp_{san_name}"):
+            if st.button(f"trig_bexp_{san_name}", key=f"trig_bexp_{san_name}"):
                 modal_bank_expense(acc['name'])
                 
         for c in live_personal_cc:
             san_name = c['name'].replace(' ', '_')
-            if st.button(f"TRIG_CEXP_{san_name}", key=f"trig_cexp_{san_name}"):
+            if st.button(f"trig_cexp_{san_name}", key=f"trig_cexp_{san_name}"):
                 modal_card_expense(c['name'])
-            if st.button(f"TRIG_CPAY_{san_name}", key=f"trig_cpay_{san_name}"):
+            if st.button(f"trig_cpay_{san_name}", key=f"trig_cpay_{san_name}"):
                 modal_card_payment(c['name'], c['current_balance'])
                 
         for c in live_biz_cc:
             san_name = c['name'].replace(' ', '_')
-            if st.button(f"TRIG_CEXP_{san_name}", key=f"trig_bcexp_{san_name}"):
+            if st.button(f"trig_bcexp_{san_name}", key=f"trig_bcexp_{san_name}"):
                 modal_card_expense(c['name'])
-            if st.button(f"TRIG_CPAY_{san_name}", key=f"trig_bcpay_{san_name}"):
+            if st.button(f"trig_bcpay_{san_name}", key=f"trig_bcpay_{san_name}"):
                 modal_card_payment(c['name'], c['current_balance'])
 
-    st.markdown("""
+    # 5. BRIDGE EVENT LISTENER
+    components.html("""
     <script>
     (function() {
-        function hidePills() {
+        try {
             var doc = window.parent.document;
-            var btns = doc.querySelectorAll('button');
-            btns.forEach(function(b) {
-                if (b.innerText && b.innerText.trim().indexOf('TRIG_') === 0) {
-                    var wrap = b.closest('div[data-testid="stElementContainer"]') || b.closest('div[data-testid="stButton"]') || b;
-                    wrap.style.setProperty('position', 'fixed', 'important');
-                    wrap.style.setProperty('top', '-9999px', 'important');
-                    wrap.style.setProperty('left', '-9999px', 'important');
-                    wrap.style.setProperty('opacity', '0', 'important');
-                    wrap.style.setProperty('height', '0px', 'important');
-                    wrap.style.setProperty('margin', '0px', 'important');
-                    wrap.style.setProperty('pointer-events', 'none', 'important');
+            if (!doc) return;
+            
+            if (window.parent.__hubBridgeAttached) return;
+            window.parent.__hubBridgeAttached = true;
+            
+            doc.addEventListener('click', function(e) {
+                var btn = e.target.closest('[data-trigger]');
+                if (!btn) return;
+                
+                var triggerKey = btn.getAttribute('data-trigger');
+                if (!triggerKey) return;
+                
+                var container = doc.querySelector('.st-key-' + triggerKey);
+                var realBtn = container ? container.querySelector('button') : null;
+                
+                if (!realBtn) {
+                    var allBtns = doc.querySelectorAll('button');
+                    for (var i = 0; i < allBtns.length; i++) {
+                        if (allBtns[i].textContent && allBtns[i].textContent.trim() === triggerKey) {
+                            realBtn = allBtns[i];
+                            break;
+                        }
+                    }
                 }
-            });
-        }
-        hidePills();
-        var obs = new MutationObserver(hidePills);
-        obs.observe(window.parent.document.body, { childList: true, subtree: true });
+                
+                if (realBtn) {
+                    realBtn.click();
+                    try {
+                        var evt = new MouseEvent('click', { bubbles: true, cancelable: true, view: window.parent });
+                        realBtn.dispatchEvent(evt);
+                    } catch(err) {}
+                }
+            }, true);
+        } catch(err) {}
     })();
     </script>
-    """, unsafe_allow_html=True)
+    """, height=0)
 
 # ------------------------------------------
 # TAB 1: COMMAND CENTER
