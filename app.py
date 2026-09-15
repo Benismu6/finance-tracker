@@ -100,6 +100,18 @@ st.markdown("""
         padding: 10px;
         text-align: right;
     }
+    
+    .stButton>button {
+        width: 100%;
+        border-radius: 10px;
+        height: 38px;
+        font-size: 13px;
+        font-weight: 700;
+        background-color: #2563EB;
+        color: white;
+        border: none;
+        box-shadow: 0 2px 6px rgba(37,99,235,0.4);
+    }
 
     div.small-add-btn button {
         height: 32px !important;
@@ -109,32 +121,109 @@ st.markdown("""
     }
 
     /* CARD CONTAINER STYLING */
-    div[data-testid="stExpander"] {
-        border: 1px solid #334155 !important;
-        border-radius: 12px !important;
-        background-color: #1E293B !important;
-        margin-bottom: 8px !important;
-        overflow: hidden !important;
+    details.card-container {
+        background-color: #1E293B;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        margin-bottom: 10px;
+        overflow: hidden;
+        transition: border-color 0.2s ease;
     }
-    div[data-testid="stExpander"] summary {
-        background-color: #1E293B !important;
-        padding: 14px 18px !important;
-        font-size: 15px !important;
-        color: #F8FAFC !important;
-        border-radius: 12px !important;
+    details.card-container[open] {
+        border-color: #3B82F6;
     }
-    div[data-testid="stExpander"] summary:hover {
-        background-color: #243248 !important;
+    details.card-container > summary {
+        list-style: none;
+        outline: none;
+        cursor: pointer;
+        padding: 14px 16px;
+        background-color: #1E293B;
+        user-select: none;
     }
-    div[data-testid="stExpander"] div[role="region"] {
-        background-color: #0F172A !important;
-        padding: 12px 14px !important;
-        border-top: 1px solid #334155 !important;
+    details.card-container > summary::-webkit-details-marker {
+        display: none;
+    }
+    details.card-container > summary:hover {
+        background-color: #243248;
+    }
+    .card-drawer {
+        background-color: #0F172A;
+        padding: 12px 14px;
+        border-top: 1px solid #334155;
     }
 
-    .badge-opt { background-color: #065F46; color: #6EE7B7; padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
-    .badge-warn { background-color: #7C2D12; color: #FDBA74; padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
-    .badge-biz { background-color: #312E81; color: #C7D2FE; padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    /* COMPACT SINGLE-ROW ACTION BUTTONS */
+    button.drawer-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 4px 6px;
+        font-size: 10px;
+        font-weight: 700;
+        border-radius: 6px;
+        text-decoration: none !important;
+        cursor: pointer;
+        user-select: none;
+        border: 1px solid transparent;
+        outline: none !important;
+        white-space: nowrap;
+        flex: 1;
+        height: 28px;
+    }
+    button.drawer-btn:focus, button.drawer-btn:active, button.drawer-btn:hover {
+        text-decoration: none !important;
+        outline: none !important;
+    }
+    .drawer-btn-blue {
+        background-color: #2563EB;
+        color: #FFFFFF !important;
+        border-color: #3B82F6;
+    }
+    .drawer-btn-blue:hover {
+        background-color: #1D4ED8;
+    }
+    .drawer-btn-purple {
+        background-color: #7C3AED;
+        color: #FFFFFF !important;
+        border-color: #8B5CF6;
+    }
+    .drawer-btn-purple:hover {
+        background-color: #6D28D9;
+    }
+    .drawer-btn-emerald {
+        background-color: #059669;
+        color: #FFFFFF !important;
+        border-color: #10B981;
+    }
+    .drawer-btn-emerald:hover {
+        background-color: #047857;
+    }
+    .drawer-btn-slate {
+        background-color: #334155;
+        color: #F1F5F9 !important;
+        border-color: #475569;
+    }
+    .drawer-btn-slate:hover {
+        background-color: #475569;
+    }
+
+    div.st-key-hidden_triggers,
+    div.st-key-hidden_triggers * {
+        position: fixed !important;
+        top: -9999px !important;
+        left: -9999px !important;
+        width: 1px !important;
+        height: 1px !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        overflow: hidden !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .badge-opt { background-color: #065F46; color: #6EE7B7; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .badge-warn { background-color: #7C2D12; color: #FDBA74; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .badge-biz { background-color: #312E81; color: #C7D2FE; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -665,7 +754,7 @@ tabs = st.tabs([
     "💬 AI Advisor"
 ])
 
-def render_card_transactions(acc_name):
+def get_tx_rows_html(acc_name):
     if not df_tx.empty and "Account" in df_tx.columns:
         sub_tx = df_tx[
             (df_tx["Account"] == acc_name) | 
@@ -673,7 +762,7 @@ def render_card_transactions(acc_name):
         ].tail(5)
         
         if not sub_tx.empty:
-            st.markdown("<div style='font-size:12px; font-weight:700; color:#94A3B8; margin-top:6px; margin-bottom:4px;'>Last 5 Transactions:</div>", unsafe_allow_html=True)
+            html = "<div style='font-size:12px; font-weight:700; color:#94A3B8; margin-top:6px; margin-bottom:4px;'>Last 5 Transactions:</div>"
             for _, r in sub_tx.iloc[::-1].iterrows():
                 t_type = r.get("Type", "Expense")
                 amt = float(r.get("Amount", 0.0))
@@ -685,7 +774,7 @@ def render_card_transactions(acc_name):
                 amt_color = "#34D399" if t_type == "Income" else ("#60A5FA" if t_type == "CC Payment" else "#F87171")
                 prefix = "+" if t_type == "Income" else "-"
                 
-                st.markdown(f"""
+                html += f"""
                 <div style="display:flex; justify-content:space-between; align-items:center; background:#162032; border-radius:6px; padding:6px 10px; margin-bottom:4px; font-size:12px; border:1px solid #334155;">
                     <div>
                         <span style="color:#CBD5E1; font-weight:600;">{label}</span>
@@ -695,11 +784,11 @@ def render_card_transactions(acc_name):
                         {prefix}${amt:,.2f}
                     </div>
                 </div>
-                """, unsafe_allow_html=True)
+                """
+            return html
         else:
-            st.caption("ℹ️ No transactions recorded for this account yet.")
-    else:
-        st.caption("ℹ️ No ledger records available.")
+            return "<div style='font-size:12px; color:#64748B; padding:4px 0;'>ℹ️ No transactions recorded for this account yet.</div>"
+    return "<div style='font-size:12px; color:#64748B; padding:4px 0;'>ℹ️ No ledger records available.</div>"
 
 # ------------------------------------------
 # TAB 0: ACCOUNTS & CREDIT HUB (DEFAULT LOAD)
@@ -722,28 +811,37 @@ with tabs[0]:
     for acc in live_cash_registry:
         bal = acc["current_balance"]
         pct_of_total = (bal / total_cash) * 100 if total_cash > 0 else 0.0
-        card_title = f"💵  {acc['name']}  —  ${bal:,.2f}  ({pct_of_total:.1f}% of cash)"
+        tx_rows = get_tx_rows_html(acc['name'])
+        sanitized_name = acc['name'].replace(' ', '_')
         
-        with st.expander(card_title, expanded=False):
-            st.markdown(f"""
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <span style="font-size:12px; color:#94A3B8;"><b>Role:</b> {acc['role']}</span>
-                <span style="font-weight:800; font-size:16px; color:#38BDF8;">${bal:,.2f}</span>
+        btn_html = f"""
+        <div style="display:flex; gap:4px; margin-bottom:8px; flex-wrap:nowrap; width:100%;">
+            <button class="drawer-btn drawer-btn-emerald" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_INC_{sanitized_name}'; }}); if(b) b.click();">💵 Deposit</button>
+            <button class="drawer-btn drawer-btn-purple" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_TRANS_{sanitized_name}'; }}); if(b) b.click();">🔁 Transfer</button>
+            <button class="drawer-btn drawer-btn-slate" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_BEXP_{sanitized_name}'; }}); if(b) b.click();">💸 Expense</button>
+        </div>
+        """
+        
+        st.markdown(f"""
+        <details class="card-container">
+            <summary>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{acc['name']}</span>
+                        <div style="font-size:12px; color:#94A3B8;">{acc['role']}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="font-weight:800; font-size:18px; color:#FFFFFF;">${bal:,.2f}</span>
+                        <div style="font-size:11px; color:#94A3B8;">{pct_of_total:.1f}% of cash</div>
+                    </div>
+                </div>
+            </summary>
+            <div class="card-drawer">
+                {btn_html}
+                {tx_rows}
             </div>
-            """, unsafe_allow_html=True)
-            
-            c_btn1, c_btn2, c_btn3 = st.columns(3)
-            with c_btn1:
-                if st.button("💵 Deposit", key=f"btn_inc_{acc['name']}"):
-                    modal_bank_income(acc['name'])
-            with c_btn2:
-                if st.button("🔁 Transfer", key=f"btn_trans_{acc['name']}"):
-                    modal_bank_transfer(acc['name'])
-            with c_btn3:
-                if st.button("💸 Expense", key=f"btn_bexp_{acc['name']}"):
-                    modal_bank_expense(acc['name'])
-                    
-            render_card_transactions(acc["name"])
+        </details>
+        """, unsafe_allow_html=True)
 
     st.divider()
 
@@ -754,29 +852,40 @@ with tabs[0]:
         bal = c["current_balance"]
         limit = c["limit"]
         util = c["utilization"]
-        card_title = f"💳  {c['name']}  —  ${bal:.2f} ({util:.1f}%)  |  {c['badge_html']}"
+        tx_rows = get_tx_rows_html(c['name'])
+        sanitized_name = c['name'].replace(' ', '_')
         
-        with st.expander(card_title, expanded=False):
-            st.markdown(f"""
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                <span style="font-size:12px; color:#94A3B8;"><b>Limit:</b> ${limit:,.0f}</span>
-                <span style="font-weight:800; font-size:16px; color:#F8FAFC;">${bal:.2f}</span>
+        btn_html = f"""
+        <div style="display:flex; gap:4px; margin-bottom:8px; flex-wrap:nowrap; width:100%;">
+            <button class="drawer-btn drawer-btn-blue" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_CEXP_{sanitized_name}'; }}); if(b) b.click();">💳 Charge</button>
+            <button class="drawer-btn drawer-btn-purple" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_CPAY_{sanitized_name}'; }}); if(b) b.click();">🔄 Pay Card</button>
+        </div>
+        """
+        
+        st.markdown(f"""
+        <details class="card-container">
+            <summary>
+                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <div>
+                        <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{c['name']}</span>
+                        <div style="font-size:12px; color:#94A3B8;">Limit: ${limit:,.0f} | Closes: {c['close_str']}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="font-weight:800; font-size:18px; color:#FFFFFF;">${bal:.2f}</span>
+                        <div style="font-size:11px; color:#94A3B8;">({util:.1f}%)</div>
+                    </div>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                    <span style="font-size:12px; color:#CBD5E1;">{c['action_text']}</span>
+                    <div>{c['badge_html']}</div>
+                </div>
+            </summary>
+            <div class="card-drawer">
+                {btn_html}
+                {tx_rows}
             </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <span style="font-size:12px; color:#CBD5E1;">{c['action_text']}</span>
-                <div>{c['badge_html']}</div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            c_btn1, c_btn2 = st.columns(2)
-            with c_btn1:
-                if st.button("💳 Charge", key=f"btn_cexp_{c['name']}"):
-                    modal_card_expense(c['name'])
-            with c_btn2:
-                if st.button("🔄 Pay Card", key=f"btn_cpay_{c['name']}"):
-                    modal_card_payment(c['name'], c['current_balance'])
-                    
-            render_card_transactions(c["name"])
+        </details>
+        """, unsafe_allow_html=True)
 
     st.divider()
 
@@ -785,29 +894,89 @@ with tabs[0]:
     
     for c in live_biz_cc:
         bal = c["current_balance"]
-        card_title = f"💼  {c['name']}  —  ${bal:.2f}  |  💼 BUSINESS"
+        tx_rows = get_tx_rows_html(c['name'])
+        sanitized_name = c['name'].replace(' ', '_')
         
-        with st.expander(card_title, expanded=False):
-            st.markdown(f"""
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                <span style="font-size:12px; color:#94A3B8;"><b>Business Card</b></span>
-                <span style="font-weight:800; font-size:16px; color:#F8FAFC;">${bal:.2f}</span>
+        btn_html = f"""
+        <div style="display:flex; gap:4px; margin-bottom:8px; flex-wrap:nowrap; width:100%;">
+            <button class="drawer-btn drawer-btn-blue" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_CEXP_{sanitized_name}'; }}); if(b) b.click();">💳 Charge</button>
+            <button class="drawer-btn drawer-btn-purple" type="button" onclick="var doc=window.parent.document; var btns=Array.from(doc.querySelectorAll('button')); var b=btns.find(function(el){{ return el.innerText && el.innerText.trim() === 'TRIG_CPAY_{sanitized_name}'; }}); if(b) b.click();">🔄 Pay Card</button>
+        </div>
+        """
+        
+        st.markdown(f"""
+        <details class="card-container">
+            <summary>
+                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <div>
+                        <span style="font-weight:700; font-size:15px; color:#F8FAFC;">{c['name']}</span>
+                        <div style="font-size:12px; color:#94A3B8;">Business Card</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="font-weight:800; font-size:18px; color:#FFFFFF;">${bal:.2f}</span>
+                    </div>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                    <span style="font-size:12px; color:#CBD5E1;">Due: {c['due_str']} | Closes: {c['close_str']}</span>
+                    <div><span class="badge-biz">💼 BUSINESS</span></div>
+                </div>
+            </summary>
+            <div class="card-drawer">
+                {btn_html}
+                {tx_rows}
             </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <span style="font-size:12px; color:#CBD5E1;">Due: {c['due_str']} | Closes: {c['close_str']}</span>
-                <div><span class="badge-biz">💼 BUSINESS</span></div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            c_btn1, c_btn2 = st.columns(2)
-            with c_btn1:
-                if st.button("💳 Charge", key=f"btn_bcexp_{c['name']}"):
-                    modal_card_expense(c['name'])
-            with c_btn2:
-                if st.button("🔄 Pay Card", key=f"btn_bcpay_{c['name']}"):
-                    modal_card_payment(c['name'], c['current_balance'])
-                    
-            render_card_transactions(c["name"])
+        </details>
+        """, unsafe_allow_html=True)
+
+    with st.container(key="hidden_triggers"):
+        for acc in live_cash_registry:
+            san_name = acc['name'].replace(' ', '_')
+            if st.button(f"TRIG_INC_{san_name}", key=f"trig_inc_{san_name}"):
+                modal_bank_income(acc['name'])
+            if st.button(f"TRIG_TRANS_{san_name}", key=f"trig_trans_{san_name}"):
+                modal_bank_transfer(acc['name'])
+            if st.button(f"TRIG_BEXP_{san_name}", key=f"trig_bexp_{san_name}"):
+                modal_bank_expense(acc['name'])
+                
+        for c in live_personal_cc:
+            san_name = c['name'].replace(' ', '_')
+            if st.button(f"TRIG_CEXP_{san_name}", key=f"trig_cexp_{san_name}"):
+                modal_card_expense(c['name'])
+            if st.button(f"TRIG_CPAY_{san_name}", key=f"trig_cpay_{san_name}"):
+                modal_card_payment(c['name'], c['current_balance'])
+                
+        for c in live_biz_cc:
+            san_name = c['name'].replace(' ', '_')
+            if st.button(f"TRIG_CEXP_{san_name}", key=f"trig_bcexp_{san_name}"):
+                modal_card_expense(c['name'])
+            if st.button(f"TRIG_CPAY_{san_name}", key=f"trig_bcpay_{san_name}"):
+                modal_card_payment(c['name'], c['current_balance'])
+
+    st.markdown("""
+    <script>
+    (function() {
+        function hidePills() {
+            var doc = window.parent.document;
+            var btns = doc.querySelectorAll('button');
+            btns.forEach(function(b) {
+                if (b.innerText && b.innerText.trim().indexOf('TRIG_') === 0) {
+                    var wrap = b.closest('div[data-testid="stElementContainer"]') || b.closest('div[data-testid="stButton"]') || b;
+                    wrap.style.setProperty('position', 'fixed', 'important');
+                    wrap.style.setProperty('top', '-9999px', 'important');
+                    wrap.style.setProperty('left', '-9999px', 'important');
+                    wrap.style.setProperty('opacity', '0', 'important');
+                    wrap.style.setProperty('height', '0px', 'important');
+                    wrap.style.setProperty('margin', '0px', 'important');
+                    wrap.style.setProperty('pointer-events', 'none', 'important');
+                }
+            });
+        }
+        hidePills();
+        var obs = new MutationObserver(hidePills);
+        obs.observe(window.parent.document.body, { childList: true, subtree: true });
+    })();
+    </script>
+    """, unsafe_allow_html=True)
 
 # ------------------------------------------
 # TAB 1: COMMAND CENTER
