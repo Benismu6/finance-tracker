@@ -883,7 +883,7 @@ with tabs[1]:
             <span style="color:#93C5FD; font-size:12px;">Personal Util: {personal_utilization:.2f}%</span>
         </div>
         <div class="metric-val">${net_liquid_cash:,.2f}</div>
-        <div class="metric-sub">Total Cash: ${total_cash:,.2f} | Personal Debt: ${personal_cc_debt:,.2f} \vert{} Biz Debt:${biz_cc_debt:,.2f}</div>
+        <div class="metric-sub">Total Cash: ${total_cash:,.2f} | Personal Debt: ${personal_cc_debt:,.2f} | Biz Debt: ${biz_cc_debt:,.2f}</div>
     </div>
     """, unsafe_allow_html=True)
     
