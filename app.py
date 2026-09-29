@@ -359,6 +359,8 @@ for _, acc in cash_df.iterrows():
     transfers_out = df_tx[(df_tx["Account"] == a_name) & (df_tx["Type"] == "Transfer") & (df_tx["Notes"].str.contains("Outflow", na=False))]["Amount"].sum()
     
     current_cash = base_val + inc_val - exp_val - cc_paid_out + transfers_in - transfers_out
+    if abs(current_cash) < 1e-9:
+        current_cash = 0.0
     live_cash_registry.append({
         "name": a_name,
         "role": acc["Role_Or_Memo"],
@@ -367,6 +369,8 @@ for _, acc in cash_df.iterrows():
     })
 
 total_cash = sum(c["current_balance"] for c in live_cash_registry)
+if abs(total_cash) < 1e-9:
+    total_cash = 0.0
 
 # 2. PERSONAL CC BALANCES & AZEO
 raw_personal_cards = []
@@ -385,9 +389,13 @@ for _, card in p_cc_df.iterrows():
     spent_all = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "Expense")]["Amount"].sum()
     paid_all = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "CC Payment")]["Amount"].sum()
     current_live_bal = base_bal + spent_all - paid_all
+    if abs(current_live_bal) < 1e-9:
+        current_live_bal = 0.0
     
     charges_prior = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "Expense") & (df_tx["Date_DT"] <= last_close)]["Amount"].sum()
     stmt_balance_billed = base_bal + charges_prior - paid_all
+    if abs(stmt_balance_billed) < 1e-9:
+        stmt_balance_billed = 0.0
     
     raw_personal_cards.append({
         "name": c_name,
@@ -423,7 +431,7 @@ for c in raw_personal_cards:
         badge_html = '<span class="badge-opt">✅ AZEO ACTIVE (~1%)</span>'
         action_text = f"Leave ${bal:.2f} to report on {next_close.strftime('%b %d')}"
     elif bal > 0.01:
-        badge_html = '<span class="badge-warn">⚠️ PAY BEFORE CLOSE</span>'
+        badge_html = '<span class="badge-warn">⚠️️ PAY BEFORE CLOSE</span>'
         action_text = f"Pay ${bal:.2f} by {next_close.strftime('%b %d')} to report $0"
     else:
         badge_html = '<span class="badge-opt">✅ $0 REPORTING</span>'
@@ -450,6 +458,8 @@ for _, card in b_cc_df.iterrows():
     spent = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "Expense")]["Amount"].sum()
     paid = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "CC Payment")]["Amount"].sum()
     current_bal = base_bal + spent - paid
+    if abs(current_bal) < 1e-9:
+        current_bal = 0.0
     
     next_due = get_next_recurring_date(due_d, today_dt)
     next_close = get_next_recurring_date(close_d, today_dt)
@@ -464,12 +474,23 @@ for _, card in b_cc_df.iterrows():
     })
 
 personal_cc_debt = sum(c["current_balance"] for c in live_personal_cc)
+if abs(personal_cc_debt) < 1e-9:
+    personal_cc_debt = 0.0
+
 personal_cc_limit = sum(c["limit"] for c in live_personal_cc)
 personal_utilization = (personal_cc_debt / personal_cc_limit) * 100 if personal_cc_limit > 0 else 0.0
 
 biz_cc_debt = sum(c["current_balance"] for c in live_biz_cc)
+if abs(biz_cc_debt) < 1e-9:
+    biz_cc_debt = 0.0
+
 total_all_debt = personal_cc_debt + biz_cc_debt
+if abs(total_all_debt) < 1e-9:
+    total_all_debt = 0.0
+
 net_liquid_cash = total_cash - total_all_debt
+if abs(net_liquid_cash) < 1e-9:
+    net_liquid_cash = 0.0
 
 HOME_GOAL = 26500.00
 goal_progress = min(total_cash / HOME_GOAL, 1.0)
@@ -788,7 +809,7 @@ def get_tx_rows_html(acc_name):
                 )
             return html
         else:
-            return "<div style='font-size:12px; color:#64748B; padding:4px 0;'>ℹ️ No transactions recorded for this account yet.</div>"
+            return "<div style='font-size:12px; color:#64748B; padding:4px 0;'>ℹ️️ No transactions recorded for this account yet.</div>"
     return "<div style='font-size:12px; color:#64748B; padding:4px 0;'>ℹ️ No ledger records available.</div>"
 
 # ------------------------------------------
