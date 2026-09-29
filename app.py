@@ -363,7 +363,7 @@ for _, acc in cash_df.iterrows():
         "name": a_name,
         "role": acc["Role_Or_Memo"],
         "base": base_val,
-        "current_balance": max(current_cash, 0.0)
+        "current_balance": current_cash
     })
 
 total_cash = sum(c["current_balance"] for c in live_cash_registry)
@@ -384,10 +384,10 @@ for _, card in p_cc_df.iterrows():
     
     spent_all = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "Expense")]["Amount"].sum()
     paid_all = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "CC Payment")]["Amount"].sum()
-    current_live_bal = max(base_bal + spent_all - paid_all, 0.0)
+    current_live_bal = base_bal + spent_all - paid_all
     
     charges_prior = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "Expense") & (df_tx["Date_DT"] <= last_close)]["Amount"].sum()
-    stmt_balance_billed = max(base_bal + charges_prior - paid_all, 0.0)
+    stmt_balance_billed = base_bal + charges_prior - paid_all
     
     raw_personal_cards.append({
         "name": c_name,
@@ -449,7 +449,7 @@ for _, card in b_cc_df.iterrows():
     
     spent = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "Expense")]["Amount"].sum()
     paid = df_tx[(df_tx["Account"] == c_name) & (df_tx["Type"] == "CC Payment")]["Amount"].sum()
-    current_bal = max(base_bal + spent - paid, 0.0)
+    current_bal = base_bal + spent - paid
     
     next_due = get_next_recurring_date(due_d, today_dt)
     next_close = get_next_recurring_date(close_d, today_dt)
